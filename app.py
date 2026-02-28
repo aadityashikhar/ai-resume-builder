@@ -249,104 +249,133 @@ def call_hf_api(prompt: str, max_tokens: int = 900) -> str:
 
 
 def generate_pdf(text: str, title: str = "Resume") -> bytes:
-    """Generate PDF - fpdf2==2.7.9"""
-    import io, unicodedata
-    from fpdf import FPDF
-
-    def safe(s):
-        return unicodedata.normalize("NFKD", s).encode("latin-1", "replace").decode("latin-1")
-
-    SECTION_KEYS = ["summary", "education", "skills", "projects",
-                    "experience", "certifications", "objective", "languages"]
-
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_margins(20, 20, 20)
-    pdf.set_auto_page_break(True, 20)
-
-    pdf.set_font("Helvetica", "B", 18)
-    pdf.set_text_color(31, 56, 100)
-    pdf.cell(0, 12, safe(title), new_x="LMARGIN", new_y="NEXT", align="C")
-    pdf.set_draw_color(46, 117, 182)
-    pdf.set_line_width(0.5)
-    pdf.line(20, pdf.get_y(), 190, pdf.get_y())
-    pdf.ln(4)
-
-    for line in text.split("\n"):
-        stripped = line.strip()
-        if not stripped:
-            pdf.ln(3)
-            continue
-        clean_line = safe(stripped.replace("##","").replace("**","").strip())
-        is_heading = (
-            stripped.startswith("##") or stripped.startswith("**")
-            or stripped.isupper()
-            or any(stripped.lower().startswith(k) for k in SECTION_KEYS)
-        )
-        if is_heading:
-            pdf.ln(2)
-            pdf.set_font("Helvetica", "B", 12)
-            pdf.set_text_color(46, 117, 182)
-            pdf.cell(0, 8, clean_line, new_x="LMARGIN", new_y="NEXT")
-            pdf.set_draw_color(200, 200, 200)
-            pdf.set_line_width(0.2)
-            pdf.line(20, pdf.get_y(), 190, pdf.get_y())
-            pdf.ln(1)
-        else:
-            pdf.set_font("Helvetica", "", 10)
-            pdf.set_text_color(45, 45, 45)
-            pdf.multi_cell(0, 6, clean_line)
-
-    return bytes(pdf.output())
-
-def generate_docx(text: str, title: str = "Resume") -> bytes:
-    """Generate Word doc - python-docx installed as python-docx==1.1.2, imported as docx"""
+    """Pure Python PDF — zero external packages needed."""
     import io
-    from docx import Document
-    from docx.shared import Pt, Inches, RGBColor
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    SECTION_KEYS = ["summary","education","skills","projects",
+                    "experience","certifications","objective","languages"]
 
-    SECTION_KEYS = ["summary", "education", "skills", "projects",
-                    "experience", "certifications", "objective",
-                    "languages", "awards", "publications"]
+    def pdf_str(s):
+        s = s.encode("latin-1","replace").decode("latin-1")
+        return s.replace("\\","\\\\").replace("(","\\(").replace(")","\\)").replace("\n","\\n")
 
-    doc = Document()
-    for sec in doc.sections:
-        sec.top_margin    = Inches(1)
-        sec.bottom_margin = Inches(1)
-        sec.left_margin   = Inches(1)
-        sec.right_margin  = Inches(1)
+    def wrap(text, max_chars=90):
+        words = text.split()
+        result, current = [], ""
+        for w in words:
+            if len(current) + len(w) + 1 <= max_chars:
+                current = (current + " " + w).strip()
+            else:
+                if current: result.append(current)
+                current = w
+        if current: result.append(current)
+        return result if result else [""]
 
-    # Document title
-    t = doc.add_heading(title, 0)
-    t.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    def add_text(ops_list, text_str, x, y_pos, font, size, r=0, g=0, b=0):
+        ops_list.append(f"BT {r:.2f} {g:.2f} {b:.2f} rg /{font} {size} Tf {x} {y_pos} Td ({pdf_str(text_str)}) Tj ET")
+
+    ops, y = [], 750
+    add_text(ops, title, 72, y, "HB", 18, 0.12, 0.22, 0.39)
+    y -= 8
+    ops.append(f"0.18 0.46 0.71 RG 1 w 72 {y} m 540 {y} l S 0 0 0 RG")
+    y -= 18
 
     for line in text.split("\n"):
-        stripped = line.strip()
-        if not stripped:
-            doc.add_paragraph("")
-            continue
-        clean_line = stripped.replace("##","").replace("**","").strip()
-        is_heading = (
-            stripped.startswith("##")
-            or stripped.startswith("**")
-            or (stripped.isupper() and 3 < len(stripped) < 50)
-            or any(stripped.lower().startswith(k) for k in SECTION_KEYS)
-        )
+        if y < 60: break
+        s = line.strip()
+        if not s:
+            y -= 6; continue
+        clean = s.replace("##","").replace("**","").strip()
+        is_heading = (s.startswith("##") or s.startswith("**")
+            or (s.isupper() and 3 < len(s) < 50)
+            or any(s.lower().startswith(k) for k in SECTION_KEYS))
         if is_heading:
-            h = doc.add_heading(clean_line, level=2)
-            if h.runs:
-                h.runs[0].font.color.rgb = RGBColor(0x1F, 0x38, 0x64)
+            y -= 4
+            add_text(ops, clean[:80], 72, y, "HB", 12, 0.18, 0.46, 0.71)
+            y -= 14
+            ops.append(f"0.78 0.78 0.78 RG 0.3 w 72 {y+2} m 540 {y+2} l S 0 0 0 RG")
+            y -= 4
         else:
-            p = doc.add_paragraph(clean_line)
-            if p.runs:
-                p.runs[0].font.size = Pt(10)
+            for wline in wrap(clean, 90):
+                if y < 60: break
+                add_text(ops, wline, 72, y, "H", 10, 0.18, 0.18, 0.18)
+                y -= 14
 
+    stream = "\n".join(ops).encode("latin-1","replace")
+    font_dict = b"<< /H << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> /HB << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> >>"
+    objs = [
+        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font " + font_dict + b" >> >>\nendobj\n",
+        b"4 0 obj\n<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream\nendobj\n",
+    ]
     buf = io.BytesIO()
-    doc.save(buf)
-    buf.seek(0)
+    buf.write(b"%PDF-1.4\n")
+    offs = []
+    for o in objs:
+        offs.append(buf.tell()); buf.write(o)
+    xp = buf.tell()
+    buf.write(b"xref\n0 " + str(len(objs)+1).encode() + b"\n0000000000 65535 f \n")
+    for o in offs:
+        buf.write(f"{o:010d} 00000 n \n".encode())
+    buf.write(b"trailer\n<< /Size " + str(len(objs)+1).encode() + b" /Root 1 0 R >>\nstartxref\n" + str(xp).encode() + b"\n%%EOF\n")
     return buf.getvalue()
 
+
+def generate_docx(text: str, title: str = "Resume") -> bytes:
+    """Pure Python DOCX using zipfile — zero external packages needed."""
+    import io, zipfile
+    SECTION_KEYS = ["summary","education","skills","projects",
+                    "experience","certifications","objective","languages"]
+
+    def xe(s):
+        return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace('"',"&quot;")
+
+    def para(txt, style="Normal", bold=False, color="2D2D2D", size=20):
+        b = "<w:b/>" if bold else ""
+        return f'<w:p><w:pPr><w:pStyle w:val="{style}"/><w:spacing w:after="80"/></w:pPr><w:r><w:rPr>{b}<w:color w:val="{color}"/><w:sz w:val="{size}"/><w:szCs w:val="{size}"/></w:rPr><w:t xml:space="preserve">{xe(txt)}</w:t></w:r></w:p>'
+
+    parts = [para(title, bold=True, color="1F3864", size=32)]
+    for line in text.split("\n"):
+        s = line.strip()
+        if not s:
+            parts.append('<w:p><w:pPr><w:spacing w:after="40"/></w:pPr></w:p>')
+            continue
+        clean = s.replace("##","").replace("**","").strip()
+        is_h = (s.startswith("##") or s.startswith("**")
+            or (s.isupper() and 3 < len(s) < 50)
+            or any(s.lower().startswith(k) for k in SECTION_KEYS))
+        if is_h:
+            parts.append(para(clean, bold=True, color="2E75B6", size=24))
+        else:
+            parts.append(para(clean, color="2D2D2D", size=20))
+
+    doc_xml = ('''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:body>''' + "".join(parts) +
+'''<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
+</w:body></w:document>''')
+
+    ct = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>'''
+    rr = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>'''
+    wr = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'''
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", ct)
+        z.writestr("_rels/.rels", rr)
+        z.writestr("word/document.xml", doc_xml)
+        z.writestr("word/_rels/document.xml.rels", wr)
+    buf.seek(0)
+    return buf.getvalue()
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  ML Job Match Scorer  (keyword / TF-IDF cosine – no API needed)
