@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CareerForge AI — Architecture & Roadmap</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0C0C0C;
+  --s1: #141414;
+  --s2: #1C1C1C;
+  --border: #272727;
+  --accent: #C8FF00;
+  --accent2: #FF6B35;
+  --accent3: #8B5CF6;
+  --accent4: #06B6D4;
+  --text: #F0EDE6;
+  --muted: #666;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  line-height: 1.6;
+}
+
+.grid-bg {
+  position: fixed; inset: 0; z-index: 0;
+  background-image: linear-gradient(rgba(200,255,0,0.03) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(200,255,0,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+}
+
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 2rem; position: relative; z-index: 1; }
+
+/* ─── HEADER ─────────────────────────────────────────── */
+header {
+  border-bottom: 1px solid var(--border);
+  padding: 3rem 0;
+}
+.logo {
+  font-family: 'DM Serif Display', serif;
+  font-size: 3.5rem;
+  line-height: 1;
+}
+.logo span { color: var(--accent); }
+.tagline {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.badge-row { display: flex; gap: 8px; margin-top: 1.2rem; flex-wrap: wrap; }
+.badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 2px;
+  border: 1px solid;
+}
+.badge-green { color: var(--accent); border-color: rgba(200,255,0,0.3); background: rgba(200,255,0,0.05); }
+.badge-orange { color: var(--accent2); border-color: rgba(255,107,53,0.3); background: rgba(255,107,53,0.05); }
+.badge-purple { color: var(--accent3); border-color: rgba(139,92,246,0.3); background: rgba(139,92,246,0.05); }
+.badge-cyan { color: var(--accent4); border-color: rgba(6,182,212,0.3); background: rgba(6,182,212,0.05); }
+
+/* ─── SECTION ─────────────────────────────────────────── */
+section { padding: 4rem 0; border-bottom: 1px solid var(--border); }
+.section-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 1.5rem;
+}
+h2 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 2rem;
+  margin-bottom: 2rem;
+}
+h3 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+/* ─── ARCH DIAGRAM ─────────────────────────────────────── */
+.arch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+.arch-cell {
+  background: var(--s1);
+  padding: 1.5rem;
+}
+.arch-cell-header {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 1rem;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.arch-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: #A0A0A0;
+}
+.arch-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ─── FLOW DIAGRAM ─────────────────────────────────────── */
+.flow {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  overflow-x: auto;
+  padding: 1rem 0;
+}
+.flow-step {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-right: none;
+  padding: 1.5rem 1.2rem;
+  min-width: 160px;
+  position: relative;
+}
+.flow-step:last-child { border-right: 1px solid var(--border); }
+.flow-step::after {
+  content: '▶';
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: var(--accent);
+  z-index: 2;
+}
+.flow-step:last-child::after { display: none; }
+.flow-num {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+  margin-bottom: 6px;
+}
+.flow-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.flow-desc {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ─── ROADMAP TIMELINE ─────────────────────────────────── */
+.timeline { position: relative; }
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 80px;
+  top: 0; bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+.tl-item {
+  display: flex;
+  gap: 2rem;
+  padding: 1.5rem 0;
+  position: relative;
+}
+.tl-version {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--accent);
+  min-width: 60px;
+  padding-top: 2px;
+  text-align: right;
+}
+.tl-dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  border: 2px solid;
+  flex-shrink: 0;
+  margin-top: 4px;
+  position: relative;
+  z-index: 1;
+  background: var(--bg);
+}
+.tl-content { flex: 1; }
+.tl-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.tl-tech {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+.tl-features {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: #888;
+  line-height: 1.8;
+}
+.tl-feature { display: flex; align-items: center; gap: 8px; }
+.tl-feature::before { content: '▸'; }
+
+/* ─── FILE STRUCTURE ──────────────────────────────────── */
+.file-tree {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1.5rem;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  line-height: 2;
+}
+.ft-dir { color: var(--accent); }
+.ft-file { color: #888; }
+.ft-comment { color: var(--muted); font-size: 10px; }
+
+/* ─── SETUP STEPS ─────────────────────────────────────── */
+.setup-steps { counter-reset: step; }
+.setup-step {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--border);
+  align-items: flex-start;
+}
+.setup-step:last-child { border-bottom: none; }
+.step-num {
+  background: var(--accent);
+  color: #000;
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 12px;
+  width: 28px; height: 28px;
+  border-radius: 2px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.step-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.step-desc {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: #888;
+  line-height: 1.7;
+}
+code {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+}
+
+/* ─── AI TECH TABLE ──────────────────────────────────── */
+.ai-table { width: 100%; border-collapse: collapse; }
+.ai-table th {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+  padding: 8px 12px;
+  background: var(--s2);
+  border-bottom: 1px solid var(--border);
+}
+.ai-table td {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  line-height: 1.6;
+}
+.ai-table tr:last-child td { border-bottom: none; }
+.ai-table tr:hover td { background: var(--s1); }
+
+footer {
+  padding: 3rem 0;
+  text-align: center;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<header>
+<div class="wrap">
+  <div class="logo">Career<span>Forge</span></div>
+  <div class="tagline">✦ AI Resume & Portfolio Builder — Architecture & Roadmap</div>
+  <div class="badge-row">
+    <span class="badge badge-green">GenAI · Mistral-7B</span>
+    <span class="badge badge-green">Streamlit · Python</span>
+    <span class="badge badge-orange">ML · TF-IDF Scorer</span>
+    <span class="badge badge-purple">HuggingFace Inference API</span>
+    <span class="badge badge-cyan">MVP v0.1</span>
+  </div>
+</div>
+</header>
+
+<!-- ═══ SYSTEM ARCHITECTURE ═══════════════════════════════════════════ -->
+<section>
+<div class="wrap">
+  <div class="section-label">01 — System Architecture</div>
+  <h2>How the MVP is structured</h2>
+  <div class="arch-grid">
+    <div class="arch-cell">
+      <div class="arch-cell-header">Frontend Layer</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#C8FF00"></div>Streamlit UI (app.py)</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#C8FF00"></div>Multi-page navigation</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#C8FF00"></div>Session state management</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#C8FF00"></div>Custom CSS (dark theme)</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#C8FF00"></div>Download buttons (.txt)</div>
+    </div>
+    <div class="arch-cell">
+      <div class="arch-cell-header">AI / GenAI Layer</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#FF6B35"></div>HuggingFace Inference API</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#FF6B35"></div>Model: Mistral-7B-Instruct</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#FF6B35"></div>Resume prompt engineering</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#FF6B35"></div>Cover letter generation</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#FF6B35"></div>Portfolio copy writing</div>
+    </div>
+    <div class="arch-cell">
+      <div class="arch-cell-header">ML Layer</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#8B5CF6"></div>sklearn TF-IDF Vectorizer</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#8B5CF6"></div>Cosine similarity scorer</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#8B5CF6"></div>Keyword gap detection</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#8B5CF6"></div>ATS score estimation</div>
+      <div class="arch-item"><div class="arch-dot" style="background:#8B5CF6"></div>Bigram feature extraction</div>
+    </div>
+  </div>
+
+  <!-- User Flow -->
+  <div class="section-label" style="margin-top:2rem;">Data Flow</div>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="flow-num">01</div>
+      <div class="flow-title">Student Input</div>
+      <div class="flow-desc">Name, skills, projects, target role, education</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">02</div>
+      <div class="flow-title">Prompt Builder</div>
+      <div class="flow-desc">Structures data into tailored LLM prompt</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">03</div>
+      <div class="flow-title">Mistral-7B API</div>
+      <div class="flow-desc">HuggingFace Inference API call, free tier</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">04</div>
+      <div class="flow-title">AI Output</div>
+      <div class="flow-desc">Resume / Letter / Portfolio copy returned</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">05</div>
+      <div class="flow-title">ML Scorer</div>
+      <div class="flow-desc">TF-IDF cosine match vs job description</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">06</div>
+      <div class="flow-title">Download</div>
+      <div class="flow-desc">Export as .txt / copy to clipboard</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══ FILE STRUCTURE ════════════════════════════════════════════════ -->
+<section>
+<div class="wrap">
+  <div class="section-label">02 — Project Structure</div>
+  <h2>Repository layout</h2>
+  <div class="file-tree">
+<span class="ft-dir">ai-resume-builder/</span><br>
+&nbsp;&nbsp;<span class="ft-dir">├── app.py</span> <span class="ft-comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Main Streamlit app — all 4 features</span><br>
+&nbsp;&nbsp;<span class="ft-dir">├── .streamlit/</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-file">├── secrets.toml</span> <span class="ft-comment">&nbsp;&nbsp;&nbsp;# HF_TOKEN goes here</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-file">└── config.toml</span> <span class="ft-comment">&nbsp;&nbsp;&nbsp;&nbsp;# Optional: theme overrides</span><br>
+&nbsp;&nbsp;<span class="ft-file">├── requirements.txt</span> <span class="ft-comment">&nbsp;&nbsp;# streamlit, requests, sklearn, numpy</span><br>
+&nbsp;&nbsp;<span class="ft-file">├── README.md</span><br>
+<br>
+<span class="ft-comment"># ─── v0.2 additions (coming next) ──────────────────────────</span><br>
+&nbsp;&nbsp;<span class="ft-dir">├── models/</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-file">├── fine_tune_resume.ipynb</span> <span class="ft-comment">&nbsp;# Google Colab notebook</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-file">└── skill_extractor.py</span> <span class="ft-comment">&nbsp;&nbsp;&nbsp;&nbsp;# spaCy / BERT NER</span><br>
+&nbsp;&nbsp;<span class="ft-dir">├── data/</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-file">├── resume_dataset.csv</span> <span class="ft-comment">&nbsp;&nbsp;&nbsp;&nbsp;# Kaggle resume dataset</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-file">└── job_postings.csv</span><br>
+<br>
+<span class="ft-comment"># ─── v0.3 additions (agentic) ───────────────────────────────</span><br>
+&nbsp;&nbsp;<span class="ft-dir">├── agents/</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-file">├── job_scraper_agent.py</span> <span class="ft-comment">&nbsp;&nbsp;# LangChain agent</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="ft-file">└── apply_agent.py</span> <span class="ft-comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Agentic auto-apply</span><br>
+  </div>
+</div>
+</section>
+
+<!-- ═══ AI TECHNIQUES TABLE ═══════════════════════════════════════════ -->
+<section>
+<div class="wrap">
+  <div class="section-label">03 — AI Techniques Used</div>
+  <h2>Technology breakdown by feature</h2>
+  <table class="ai-table">
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>AI Technique</th>
+        <th>Model / Library</th>
+        <th>How it's used</th>
+        <th>Phase</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="color:#F0EDE6">Resume Generator</td>
+        <td style="color:#C8FF00">Gen AI · Prompt Engineering</td>
+        <td>Mistral-7B-Instruct</td>
+        <td>Structured prompt → ATS-optimized resume text</td>
+        <td><span class="badge badge-green" style="font-size:9px">MVP</span></td>
+      </tr>
+      <tr>
+        <td style="color:#F0EDE6">Cover Letter</td>
+        <td style="color:#C8FF00">Gen AI · In-Context Learning</td>
+        <td>Mistral-7B-Instruct</td>
+        <td>JD + profile → personalized 3-paragraph letter</td>
+        <td><span class="badge badge-green" style="font-size:9px">MVP</span></td>
+      </tr>
+      <tr>
+        <td style="color:#F0EDE6">Portfolio Builder</td>
+        <td style="color:#C8FF00">Gen AI · Content Generation</td>
+        <td>Mistral-7B-Instruct</td>
+        <td>Profile → tagline + bio + project cards + skill groups</td>
+        <td><span class="badge badge-green" style="font-size:9px">MVP</span></td>
+      </tr>
+      <tr>
+        <td style="color:#F0EDE6">Job Match Scorer</td>
+        <td style="color:#FF6B35">ML · NLP · Cosine Similarity</td>
+        <td>sklearn TF-IDF</td>
+        <td>Vectorize resume + JD → cosine similarity score</td>
+        <td><span class="badge badge-green" style="font-size:9px">MVP</span></td>
+      </tr>
+      <tr>
+        <td style="color:#F0EDE6">Skill Extractor</td>
+        <td style="color:#8B5CF6">DL · NER · BERT</td>
+        <td>spaCy / HF BERT</td>
+        <td>Extract structured skills from raw resume text</td>
+        <td><span class="badge badge-orange" style="font-size:9px">v0.2</span></td>
+      </tr>
+      <tr>
+        <td style="color:#F0EDE6">Resume Fine-Tuner</td>
+        <td style="color:#8B5CF6">DL · Fine-tuning · PEFT</td>
+        <td>LoRA on Mistral-7B</td>
+        <td>Domain-specific resume model on Kaggle dataset</td>
+        <td><span class="badge badge-orange" style="font-size:9px">v0.2</span></td>
+      </tr>
+      <tr>
+        <td style="color:#F0EDE6">Semantic Job Match</td>
+        <td style="color:#8B5CF6">DL · Embeddings</td>
+        <td>sentence-transformers</td>
+        <td>Dense embedding similarity beyond keyword matching</td>
+        <td><span class="badge badge-orange" style="font-size:9px">v0.3</span></td>
+      </tr>
+      <tr>
+        <td style="color:#F0EDE6">Job Scraper Agent</td>
+        <td style="color:#06B6D4">Agentic AI · Tool Use</td>
+        <td>LangChain + Serper</td>
+        <td>Autonomously scrape, rank, and match job postings</td>
+        <td><span class="badge badge-cyan" style="font-size:9px">v0.3</span></td>
+      </tr>
+      <tr>
+        <td style="color:#F0EDE6">Interview Coach</td>
+        <td style="color:#06B6D4">Agentic AI · RAG</td>
+        <td>RAG + Mistral</td>
+        <td>Role-specific Q&A prep with feedback loop</td>
+        <td><span class="badge badge-cyan" style="font-size:9px">v1.0</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+</section>
+
+<!-- ═══ ROADMAP ════════════════════════════════════════════════════════ -->
+<section>
+<div class="wrap">
+  <div class="section-label">04 — Development Roadmap</div>
+  <h2>From MVP to full AI platform</h2>
+  <div class="timeline">
+
+    <div class="tl-item">
+      <div class="tl-version">MVP</div>
+      <div class="tl-dot" style="border-color:#C8FF00; background:#0C0C0C;"></div>
+      <div class="tl-content">
+        <div class="tl-title">Core GenAI + ML Features</div>
+        <div class="tl-tech" style="color:#C8FF00">Streamlit · Mistral-7B · sklearn · HuggingFace API</div>
+        <div class="tl-features">
+          <div class="tl-feature">Resume generator (Mistral-7B prompt engineering)</div>
+          <div class="tl-feature">Cover letter tailored to job description</div>
+          <div class="tl-feature">Portfolio copy builder (tagline, bio, project cards)</div>
+          <div class="tl-feature">Job match scorer (TF-IDF cosine similarity, ATS keywords)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-version">v0.2</div>
+      <div class="tl-dot" style="border-color:#FF6B35; background:#0C0C0C;"></div>
+      <div class="tl-content">
+        <div class="tl-title">NLP Enhancements + Fine-Tuning</div>
+        <div class="tl-tech" style="color:#FF6B35">BERT NER · LoRA Fine-Tuning · Kaggle Datasets · Google Colab</div>
+        <div class="tl-features">
+          <div class="tl-feature">Auto skill extraction from raw resume text (spaCy/BERT NER)</div>
+          <div class="tl-feature">Resume dataset fine-tuning on Kaggle data (LoRA / PEFT)</div>
+          <div class="tl-feature">Role-specific resume templates (ML Engineer, SWE, Data Analyst)</div>
+          <div class="tl-feature">PDF export using WeasyPrint or ReportLab</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-version">v0.3</div>
+      <div class="tl-dot" style="border-color:#8B5CF6; background:#0C0C0C;"></div>
+      <div class="tl-content">
+        <div class="tl-title">Agentic AI + Semantic Search</div>
+        <div class="tl-tech" style="color:#8B5CF6">LangChain Agents · sentence-transformers · FAISS · Tool Use</div>
+        <div class="tl-features">
+          <div class="tl-feature">Autonomous job scraper agent (LangChain + Serper API)</div>
+          <div class="tl-feature">Semantic job matching with dense embeddings (FAISS index)</div>
+          <div class="tl-feature">Multi-agent: Research → Tailor → Score → Suggest pipeline</div>
+          <div class="tl-feature">GitHub repo auto-analyzer (summarize projects from GitHub)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-version">v0.4</div>
+      <div class="tl-dot" style="border-color:#06B6D4; background:#0C0C0C;"></div>
+      <div class="tl-content">
+        <div class="tl-title">Deep Learning + Feedback Loop</div>
+        <div class="tl-tech" style="color:#06B6D4">RAG · RLHF Feedback · Resume Classification CNN · Streamlit Auth</div>
+        <div class="tl-features">
+          <div class="tl-feature">Interview prep chatbot with RAG (role-specific Q&A bank)</div>
+          <div class="tl-feature">Resume quality classifier (CNN on text features)</div>
+          <div class="tl-feature">User auth + resume history (SQLite / Firebase)</div>
+          <div class="tl-feature">Feedback loop: collect user ratings, improve prompts (RLHF-lite)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-version">v1.0</div>
+      <div class="tl-dot" style="border-color:#F59E0B; background:#0C0C0C;"></div>
+      <div class="tl-content">
+        <div class="tl-title">Production Platform</div>
+        <div class="tl-tech" style="color:#F59E0B">Full-stack · FastAPI Backend · React Frontend · Deployed on HuggingFace Spaces</div>
+        <div class="tl-features">
+          <div class="tl-feature">React + FastAPI architecture (migrate off Streamlit)</div>
+          <div class="tl-feature">One-click LinkedIn profile import</div>
+          <div class="tl-feature">Auto-apply agent (fill forms, submit applications)</div>
+          <div class="tl-feature">Deploy on HuggingFace Spaces + Kaggle for demos</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</section>
+
+<!-- ═══ SETUP GUIDE ════════════════════════════════════════════════════ -->
+<section>
+<div class="wrap">
+  <div class="section-label">05 — Quick Start</div>
+  <h2>Run the MVP in 5 minutes</h2>
+  <div class="setup-steps">
+    <div class="setup-step">
+      <div class="step-num">1</div>
+      <div>
+        <div class="step-title">Clone the repository</div>
+        <div class="step-desc"><code>git clone https://github.com/your-username/ai-resume-builder</code><br>Create a new GitHub repo and push the project files.</div>
+      </div>
+    </div>
+    <div class="setup-step">
+      <div class="step-num">2</div>
+      <div>
+        <div class="step-title">Install dependencies</div>
+        <div class="step-desc"><code>pip install -r requirements.txt</code><br>Installs: streamlit, requests, scikit-learn, numpy</div>
+      </div>
+    </div>
+    <div class="setup-step">
+      <div class="step-num">3</div>
+      <div>
+        <div class="step-title">Get your FREE HuggingFace token</div>
+        <div class="step-desc">Go to <code>huggingface.co/settings/tokens</code> → New Token (Read) → Copy it.<br>Add to <code>.streamlit/secrets.toml</code>: <code>HF_TOKEN = "hf_..."</code></div>
+      </div>
+    </div>
+    <div class="setup-step">
+      <div class="step-num">4</div>
+      <div>
+        <div class="step-title">Run the app</div>
+        <div class="step-desc"><code>streamlit run app.py</code><br>Opens at <code>http://localhost:8501</code></div>
+      </div>
+    </div>
+    <div class="setup-step">
+      <div class="step-num">5</div>
+      <div>
+        <div class="step-title">Deploy to Streamlit Cloud (free)</div>
+        <div class="step-desc">Push to GitHub → <code>share.streamlit.io</code> → Connect repo → Add <code>HF_TOKEN</code> in Secrets.<br>Your app is live with a public URL in ~2 minutes.</div>
+      </div>
+    </div>
+    <div class="setup-step">
+      <div class="step-num">6</div>
+      <div>
+        <div class="step-title">Optional: Run on Google Colab</div>
+        <div class="step-desc"><code>!pip install streamlit requests scikit-learn pyngrok</code><br>Use pyngrok tunnel to expose Streamlit from Colab: <code>!streamlit run app.py &</code></div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <div class="wrap">
+    ✦ CareerForge AI — MVP v0.1 &nbsp;·&nbsp; Built with Streamlit, HuggingFace, sklearn &nbsp;·&nbsp; 2025
+  </div>
+</footer>
+</body>
+</html>
