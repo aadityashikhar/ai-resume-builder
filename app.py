@@ -248,69 +248,6 @@ def call_hf_api(prompt: str, max_tokens: int = 900) -> str:
         return f"[Groq API Error: {e}]"
 
 
-def generate_pdf(text: str, title: str = "Resume") -> bytes:
-    """Generate a clean PDF from text using reportlab."""
-    import io, unicodedata
-    from reportlab.lib.pagesizes import letter
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import inch
-    from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
-    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
-
-    def clean(s):
-        return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
-
-    SECTION_KEYS = ["summary", "education", "skills", "projects",
-                    "experience", "certifications", "objective", "languages"]
-
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=letter,
-                            leftMargin=inch, rightMargin=inch,
-                            topMargin=inch, bottomMargin=inch)
-
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("DocTitle", parent=styles["Title"],
-                                 fontName="Helvetica-Bold", fontSize=18,
-                                 textColor=colors.HexColor("#1F3864"),
-                                 alignment=TA_CENTER, spaceAfter=8)
-    heading_style = ParagraphStyle("SecHeading", parent=styles["Heading2"],
-                                   fontName="Helvetica-Bold", fontSize=12,
-                                   textColor=colors.HexColor("#2E75B6"),
-                                   spaceBefore=10, spaceAfter=4)
-    body_style = ParagraphStyle("Body", parent=styles["Normal"],
-                                fontName="Helvetica", fontSize=10,
-                                textColor=colors.HexColor("#2D2D2D"),
-                                leading=16, spaceAfter=4,
-                                alignment=TA_JUSTIFY)
-
-    story = [Paragraph(clean(title), title_style),
-             HRFlowable(width="100%", thickness=1, color=colors.HexColor("#2E75B6")),
-             Spacer(1, 8)]
-
-    for line in text.split("\n"):
-        stripped = line.strip()
-        if not stripped:
-            story.append(Spacer(1, 4))
-            continue
-        clean_line = clean(stripped).replace("##","").replace("**","").strip()
-        is_heading = (
-            stripped.startswith("##") or stripped.startswith("**")
-            or stripped.isupper()
-            or any(stripped.lower().startswith(k) for k in SECTION_KEYS)
-        )
-        if is_heading:
-            story.append(Paragraph(clean_line, heading_style))
-            story.append(HRFlowable(width="100%", thickness=0.3,
-                                    color=colors.HexColor("#CCCCCC")))
-        else:
-            story.append(Paragraph(clean_line, body_style))
-
-    doc.build(story)
-    buf.seek(0)
-    return buf.getvalue()
-
-
 def generate_docx(text: str, title: str = "Resume") -> bytes:
     """Generate a Word document from text using python-docx."""
     from docx import Document
@@ -619,13 +556,7 @@ if "Resume" in page:
         st.markdown("### ✦ Generated Resume")
         st.markdown(f"<div class='output-box'>{st.session_state.resume_output}</div>", unsafe_allow_html=True)
         fname = data.get('name','student').replace(' ','_')
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.download_button("⬇ Download PDF", data=generate_pdf(st.session_state.resume_output, "Resume"), file_name=f"resume_{fname}.pdf", mime="application/pdf")
-        with c2:
-            st.download_button("⬇ Download Word", data=generate_docx(st.session_state.resume_output, "Resume"), file_name=f"resume_{fname}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-        with c3:
-            st.download_button("⬇ Download TXT", data=st.session_state.resume_output, file_name=f"resume_{fname}.txt", mime="text/plain")
+        st.download_button("⬇ Download as Word (.docx)", data=generate_docx(st.session_state.resume_output, "Resume"), file_name=f"resume_{fname}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -655,13 +586,7 @@ if "Cover" in page:
             st.markdown("### ✦ Generated Cover Letter")
             st.markdown(f"<div class='output-box'>{result}</div>", unsafe_allow_html=True)
             fname = data.get('name','student').replace(' ','_')
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.download_button("⬇ Download PDF", data=generate_pdf(result, "Cover Letter"), file_name=f"cover_letter_{fname}.pdf", mime="application/pdf")
-            with c2:
-                st.download_button("⬇ Download Word", data=generate_docx(result, "Cover Letter"), file_name=f"cover_letter_{fname}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-            with c3:
-                st.download_button("⬇ Download TXT", data=result, file_name=f"cover_letter_{fname}.txt", mime="text/plain")
+            st.download_button("⬇ Download as Word (.docx)", data=generate_docx(result, "Cover Letter"), file_name=f"cover_letter_{fname}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -691,13 +616,7 @@ if "Portfolio" in page:
             st.markdown("### ✦ Portfolio Content")
             st.markdown(f"<div class='output-box'>{result}</div>", unsafe_allow_html=True)
             fname = data.get('name','student').replace(' ','_')
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.download_button("⬇ Download PDF", data=generate_pdf(result, "Portfolio"), file_name=f"portfolio_{fname}.pdf", mime="application/pdf")
-            with c2:
-                st.download_button("⬇ Download Word", data=generate_docx(result, "Portfolio"), file_name=f"portfolio_{fname}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-            with c3:
-                st.download_button("⬇ Download TXT", data=result, file_name=f"portfolio_{fname}.txt", mime="text/plain")
+            st.download_button("⬇ Download as Word (.docx)", data=generate_docx(result, "Portfolio"), file_name=f"portfolio_{fname}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
