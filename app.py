@@ -249,77 +249,101 @@ def call_hf_api(prompt: str, max_tokens: int = 900) -> str:
 
 
 def generate_pdf(text: str, title: str = "Resume") -> bytes:
-    """Generate a clean PDF from text."""
-    try:
-        from fpdf import FPDF
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_margins(20, 20, 20)
-        pdf.set_auto_page_break(auto=True, margin=20)
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.cell(0, 10, title, ln=True)
-        pdf.set_font("Helvetica", "", 10)
-        pdf.ln(4)
-        for line in text.split("\n"):
-            line = line.strip()
-            if line.startswith("##") or line.isupper():
-                pdf.set_font("Helvetica", "B", 11)
-                pdf.ln(3)
-                pdf.cell(0, 7, line.replace("##","").strip(), ln=True)
-                pdf.set_font("Helvetica", "", 10)
-            elif line == "":
-                pdf.ln(3)
-            else:
-                pdf.multi_cell(0, 6, line)
-        return bytes(pdf.output())
-    except Exception as e:
-        return b""
+    """Generate a clean PDF from text using fpdf2."""
+    from fpdf import FPDF
+    import unicodedata
+
+    def clean(s):
+        return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+
+    SECTION_KEYS = ["summary", "education", "skills", "projects",
+                    "experience", "certifications", "objective", "languages"]
+
+    pdf = FPDF()
+    pdf.set_margins(20, 20, 20)
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=20)
+
+    # Title
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_text_color(31, 56, 100)
+    pdf.cell(0, 12, clean(title), ln=True, align="C")
+    pdf.set_draw_color(46, 117, 182)
+    pdf.set_line_width(0.5)
+    pdf.line(20, pdf.get_y(), 190, pdf.get_y())
+    pdf.ln(5)
+
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            pdf.ln(3)
+            continue
+        clean_line = clean(stripped)
+        is_heading = (
+            stripped.startswith("##")
+            or stripped.startswith("**")
+            or stripped.isupper()
+            or any(stripped.lower().startswith(k) for k in SECTION_KEYS)
+        )
+        if is_heading:
+            pdf.ln(2)
+            pdf.set_font("Helvetica", "B", 12)
+            pdf.set_text_color(46, 117, 182)
+            pdf.cell(0, 8, clean_line.replace("##","").replace("**","").strip(), ln=True)
+            pdf.set_draw_color(200, 200, 200)
+            pdf.set_line_width(0.2)
+            pdf.line(20, pdf.get_y(), 190, pdf.get_y())
+            pdf.ln(1)
+        else:
+            pdf.set_font("Helvetica", "", 10)
+            pdf.set_text_color(45, 45, 45)
+            pdf.multi_cell(0, 6, clean_line)
+
+    return bytes(pdf.output())
 
 
 def generate_docx(text: str, title: str = "Resume") -> bytes:
-    """Generate a Word document from text."""
+    """Generate a Word document from text using python-docx."""
     from docx import Document
     from docx.shared import Pt, Inches, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     import io
 
+    SECTION_KEYS = ["summary", "education", "skills", "projects",
+                    "experience", "certifications", "objective", "languages"]
+
     doc = Document()
+    for sec in doc.sections:
+        sec.top_margin    = Inches(0.8)
+        sec.bottom_margin = Inches(0.8)
+        sec.left_margin   = Inches(1)
+        sec.right_margin  = Inches(1)
 
-    # Set margins
-    for section in doc.sections:
-        section.top_margin = Inches(0.8)
-        section.bottom_margin = Inches(0.8)
-        section.left_margin = Inches(1)
-        section.right_margin = Inches(1)
-
-    # Title heading
-    title_para = doc.add_heading(title, 0)
-    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-    # Section keywords that indicate a heading
-    SECTION_KEYWORDS = ["summary", "education", "skills", "projects",
-                        "experience", "certifications", "objective", "languages"]
+    # Title
+    t = doc.add_heading(title, 0)
+    t.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     for line in text.split("\n"):
         stripped = line.strip()
         if not stripped:
             doc.add_paragraph("")
             continue
-
-        clean = stripped.replace("##", "").replace("**", "").strip()
+        clean_line = stripped.replace("##","").replace("**","").strip()
         is_heading = (
             stripped.startswith("##")
             or stripped.startswith("**")
-            or (stripped.isupper() and 3 < len(stripped) < 40)
-            or any(stripped.lower().startswith(k) for k in SECTION_KEYWORDS)
+            or (stripped.isupper() and 3 < len(stripped) < 50)
+            or any(stripped.lower().startswith(k) for k in SECTION_KEYS)
         )
-
         if is_heading:
-            h = doc.add_heading(clean, level=2)
-            h.runs[0].font.color.rgb = RGBColor(0x1a, 0x1a, 0x2e)
+            h = doc.add_heading(clean_line, level=2)
+            if h.runs:
+                h.runs[0].font.color.rgb = RGBColor(0x1F, 0x38, 0x64)
         else:
-            p = doc.add_paragraph(clean)
-            p.runs[0].font.size = Pt(10) if p.runs else None
+            p = doc.add_paragraph(clean_line)
+            if p.runs:
+                p.runs[0].font.size = Pt(10)
+                p.runs[0].font.color.rgb = RGBColor(0x2D, 0x2D, 0x2D)
 
     buf = io.BytesIO()
     doc.save(buf)
