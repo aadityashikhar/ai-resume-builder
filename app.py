@@ -278,33 +278,53 @@ def generate_pdf(text: str, title: str = "Resume") -> bytes:
 
 def generate_docx(text: str, title: str = "Resume") -> bytes:
     """Generate a Word document from text."""
-    try:
-        from docx import Document
-        from docx.shared import Pt, Inches
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-        import io
-        doc = Document()
-        for section in doc.sections:
-            section.top_margin = Inches(0.8)
-            section.bottom_margin = Inches(0.8)
-            section.left_margin = Inches(1)
-            section.right_margin = Inches(1)
-        t = doc.add_heading(title, 0)
-        t.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        for line in text.split("\n"):
-            line = line.strip()
-            if line.startswith("##") or (line.isupper() and len(line) > 3):
-                doc.add_heading(line.replace("##","").strip(), level=2)
-            elif line == "":
-                doc.add_paragraph("")
-            else:
-                p = doc.add_paragraph(line)
-                p.style.font.size = Pt(10)
-        buf = io.BytesIO()
-        doc.save(buf)
-        return buf.getvalue()
-    except Exception as e:
-        return b""
+    from docx import Document
+    from docx.shared import Pt, Inches, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    import io
+
+    doc = Document()
+
+    # Set margins
+    for section in doc.sections:
+        section.top_margin = Inches(0.8)
+        section.bottom_margin = Inches(0.8)
+        section.left_margin = Inches(1)
+        section.right_margin = Inches(1)
+
+    # Title heading
+    title_para = doc.add_heading(title, 0)
+    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # Section keywords that indicate a heading
+    SECTION_KEYWORDS = ["summary", "education", "skills", "projects",
+                        "experience", "certifications", "objective", "languages"]
+
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            doc.add_paragraph("")
+            continue
+
+        clean = stripped.replace("##", "").replace("**", "").strip()
+        is_heading = (
+            stripped.startswith("##")
+            or stripped.startswith("**")
+            or (stripped.isupper() and 3 < len(stripped) < 40)
+            or any(stripped.lower().startswith(k) for k in SECTION_KEYWORDS)
+        )
+
+        if is_heading:
+            h = doc.add_heading(clean, level=2)
+            h.runs[0].font.color.rgb = RGBColor(0x1a, 0x1a, 0x2e)
+        else:
+            p = doc.add_paragraph(clean)
+            p.runs[0].font.size = Pt(10) if p.runs else None
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
