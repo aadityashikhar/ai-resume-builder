@@ -249,65 +249,137 @@ def call_hf_api(prompt: str, max_tokens: int = 900) -> str:
 
 
 def generate_pdf(text: str, title: str = "Resume") -> bytes:
-    """Pure Python PDF — zero external packages needed."""
+    """Pure Python PDF - professional formatting, zero external packages."""
     import io
+
     SECTION_KEYS = ["summary","education","skills","projects",
-                    "experience","certifications","objective","languages"]
+                    "experience","certifications","objective","languages",
+                    "awards","achievements","internship","work experience"]
 
     def pdf_str(s):
-        s = s.encode("latin-1","replace").decode("latin-1")
-        return s.replace("\\","\\\\").replace("(","\\(").replace(")","\\)").replace("\n","\\n")
+        s = s.encode("latin-1", "replace").decode("latin-1")
+        return s.replace("\\","\\\\").replace("(","\\(").replace(")","\\)").replace("\r","")
 
-    def wrap(text, max_chars=90):
+    def wrap_text(text, max_chars=95):
         words = text.split()
-        result, current = [], ""
+        lines, current = [], ""
         for w in words:
             if len(current) + len(w) + 1 <= max_chars:
                 current = (current + " " + w).strip()
             else:
-                if current: result.append(current)
+                if current: lines.append(current)
                 current = w
-        if current: result.append(current)
-        return result if result else [""]
+        if current: lines.append(current)
+        return lines if lines else [""]
 
-    def add_text(ops_list, text_str, x, y_pos, font, size, r=0, g=0, b=0):
-        ops_list.append(f"BT {r:.2f} {g:.2f} {b:.2f} rg /{font} {size} Tf {x} {y_pos} Td ({pdf_str(text_str)}) Tj ET")
+    # Page setup
+    W, H = 612, 792
+    ML, MR, MT = 60, 60, 60   # margins
+    CW = W - ML - MR           # content width = 492
+    ops = []
+    y = H - MT
 
-    ops, y = [], 750
-    add_text(ops, title, 72, y, "HB", 18, 0.12, 0.22, 0.39)
-    y -= 8
-    ops.append(f"0.18 0.46 0.71 RG 1 w 72 {y} m 540 {y} l S 0 0 0 RG")
-    y -= 18
+    def text_op(s, x, y_pos, font, size, r=0, g=0, b=0):
+        return f"BT {r:.3f} {g:.3f} {b:.3f} rg /{font} {size} Tf {x} {y_pos:.1f} Td ({pdf_str(s)}) Tj ET"
 
-    for line in text.split("\n"):
-        if y < 60: break
-        s = line.strip()
-        if not s:
-            y -= 6; continue
-        clean = s.replace("##","").replace("**","").strip()
-        is_heading = (s.startswith("##") or s.startswith("**")
-            or (s.isupper() and 3 < len(s) < 50)
-            or any(s.lower().startswith(k) for k in SECTION_KEYS))
+    def hline(y_pos, r=0.8, g=0.8, b=0.8, width=0.5):
+        return f"{r:.1f} {g:.1f} {b:.1f} RG {width} w {ML} {y_pos:.1f} m {W-MR} {y_pos:.1f} l S 0 0 0 RG"
+
+    # ── HEADER BLOCK ──────────────────────────────────────────────────────────
+    # Parse first few lines for name/contact
+    raw_lines = [l for l in text.split("\n")]
+    name_line = raw_lines[0].strip() if raw_lines else title
+    contact_lines = []
+    content_start = 1
+    for i, l in enumerate(raw_lines[1:6], 1):
+        s = l.strip()
+        if not s or any(s.lower().startswith(k) for k in SECTION_KEYS) or s.isupper():
+            content_start = i
+            break
+        contact_lines.append(s)
+        content_start = i + 1
+
+    # Name
+    ops.append(text_op(name_line, ML, y, "HB", 22, 0.12, 0.22, 0.39))
+    y -= 20
+
+    # Contact info on one line if possible
+    if contact_lines:
+        contact_str = "  |  ".join(contact_lines)
+        ops.append(text_op(contact_str[:110], ML, y, "H", 9, 0.35, 0.35, 0.35))
+        y -= 12
+
+    # Header underline
+    ops.append(f"0.12 0.22 0.39 RG 1.5 w {ML} {y:.1f} m {W-MR} {y:.1f} l S 0 0 0 RG")
+    y -= 16
+
+    # ── BODY SECTIONS ─────────────────────────────────────────────────────────
+    remaining = raw_lines[content_start:]
+    i = 0
+    while i < len(remaining):
+        if y < 60:
+            break
+        line = remaining[i].strip()
+        i += 1
+        if not line:
+            y -= 5
+            continue
+
+        clean = line.replace("##","").replace("**","").strip()
+        is_heading = (
+            line.startswith("##") or line.startswith("**")
+            or (line.isupper() and 3 < len(line) < 50)
+            or any(line.lower().startswith(k) for k in SECTION_KEYS)
+        )
+
         if is_heading:
-            y -= 4
-            add_text(ops, clean[:80], 72, y, "HB", 12, 0.18, 0.46, 0.71)
+            y -= 8
+            # Section heading
+            ops.append(text_op(clean.upper(), ML, y, "HB", 11, 0.18, 0.46, 0.71))
             y -= 14
-            ops.append(f"0.78 0.78 0.78 RG 0.3 w 72 {y+2} m 540 {y+2} l S 0 0 0 RG")
+            # Thin underline only under heading
+            ops.append(hline(y+2, 0.18, 0.46, 0.71, 0.8))
             y -= 4
-        else:
-            for wline in wrap(clean, 90):
+
+        elif line.startswith("-") or line.startswith("•"):
+            # Bullet point
+            bullet_text = clean.lstrip("-•").strip()
+            wrapped = wrap_text(bullet_text, 88)
+            ops.append(text_op("•", ML, y, "H", 10, 0.18, 0.18, 0.18))
+            ops.append(text_op(wrapped[0], ML+12, y, "H", 10, 0.18, 0.18, 0.18))
+            y -= 14
+            for wl in wrapped[1:]:
                 if y < 60: break
-                add_text(ops, wline, 72, y, "H", 10, 0.18, 0.18, 0.18)
+                ops.append(text_op(wl, ML+12, y, "H", 10, 0.18, 0.18, 0.18))
                 y -= 14
 
-    stream = "\n".join(ops).encode("latin-1","replace")
-    font_dict = b"<< /H << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> /HB << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> >>"
+        elif "GPA" in line or "cgpa" in line.lower():
+            # GPA highlighted
+            ops.append(text_op(clean, ML, y, "HB", 10, 0.18, 0.46, 0.71))
+            y -= 14
+
+        else:
+            # Regular body text — wrapped
+            wrapped = wrap_text(clean, 95)
+            for wl in wrapped:
+                if y < 60: break
+                ops.append(text_op(wl, ML, y, "H", 10, 0.18, 0.18, 0.18))
+                y -= 14
+
+    # ── BUILD PDF ─────────────────────────────────────────────────────────────
+    stream = "\n".join(ops).encode("latin-1", "replace")
+    font_dict = (b"<< /H << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+                 b" /HB << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> >>")
+
     objs = [
         b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
         b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
-        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font " + font_dict + b" >> >>\nendobj\n",
-        b"4 0 obj\n<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream\nendobj\n",
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]"
+        b" /Contents 4 0 R /Resources << /Font " + font_dict + b" >> >>\nendobj\n",
+        b"4 0 obj\n<< /Length " + str(len(stream)).encode() + b" >>\nstream\n"
+        + stream + b"\nendstream\nendobj\n",
     ]
+
     buf = io.BytesIO()
     buf.write(b"%PDF-1.4\n")
     offs = []
@@ -317,62 +389,148 @@ def generate_pdf(text: str, title: str = "Resume") -> bytes:
     buf.write(b"xref\n0 " + str(len(objs)+1).encode() + b"\n0000000000 65535 f \n")
     for o in offs:
         buf.write(f"{o:010d} 00000 n \n".encode())
-    buf.write(b"trailer\n<< /Size " + str(len(objs)+1).encode() + b" /Root 1 0 R >>\nstartxref\n" + str(xp).encode() + b"\n%%EOF\n")
+    buf.write(b"trailer\n<< /Size " + str(len(objs)+1).encode()
+              + b" /Root 1 0 R >>\nstartxref\n" + str(xp).encode() + b"\n%%EOF\n")
     return buf.getvalue()
 
-
 def generate_docx(text: str, title: str = "Resume") -> bytes:
-    """Pure Python DOCX using zipfile — zero external packages needed."""
+    """Pure Python DOCX - professional formatting, zero external packages."""
     import io, zipfile
+
     SECTION_KEYS = ["summary","education","skills","projects",
-                    "experience","certifications","objective","languages"]
+                    "experience","certifications","objective","languages",
+                    "awards","achievements","internship","work experience"]
 
     def xe(s):
-        return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace('"',"&quot;")
+        return (s.replace("&","&amp;").replace("<","&lt;")
+                 .replace(">","&gt;").replace('"',"&quot;"))
 
-    def para(txt, style="Normal", bold=False, color="2D2D2D", size=20):
-        b = "<w:b/>" if bold else ""
-        return f'<w:p><w:pPr><w:pStyle w:val="{style}"/><w:spacing w:after="80"/></w:pPr><w:r><w:rPr>{b}<w:color w:val="{color}"/><w:sz w:val="{size}"/><w:szCs w:val="{size}"/></w:rPr><w:t xml:space="preserve">{xe(txt)}</w:t></w:r></w:p>'
+    def run(txt, bold=False, color="2D2D2D", size=20, italic=False):
+        b = "<w:b/><w:bCs/>" if bold else ""
+        it = "<w:i/><w:iCs/>" if italic else ""
+        return (f'<w:r><w:rPr>{b}{it}<w:color w:val="{color}"/>'
+                f'<w:sz w:val="{size}"/><w:szCs w:val="{size}"/>'
+                f'<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>'
+                f'<w:t xml:space="preserve">{xe(txt)}</w:t></w:r>')
 
-    parts = [para(title, bold=True, color="1F3864", size=32)]
-    for line in text.split("\n"):
+    def para(runs_xml, align="left", space_before=0, space_after=80,
+             border_bottom=False, indent_left=0):
+        jc = {"left":"left","center":"center","right":"right"}.get(align,"left")
+        bb = ('<w:pBdr><w:bottom w:val="single" w:sz="4" w:space="1" '
+              'w:color="2E75B6"/></w:pBdr>') if border_bottom else ""
+        ind = f'<w:ind w:left="{indent_left}"/>' if indent_left else ""
+        return (f'<w:p><w:pPr><w:jc w:val="{jc}"/>'
+                f'<w:spacing w:before="{space_before}" w:after="{space_after}"/>'
+                f'{bb}{ind}</w:pPr>{runs_xml}</w:p>')
+
+    def bullet_para(txt, color="2D2D2D"):
+        return (f'<w:p><w:pPr>'
+                f'<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>'
+                f'<w:spacing w:before="0" w:after="60"/>'
+                f'<w:ind w:left="360" w:hanging="180"/></w:pPr>'
+                f'{run(txt, color=color, size=20)}</w:p>')
+
+    parts = []
+
+    # Parse name + contact from first lines
+    raw_lines = text.split("\n")
+    name = raw_lines[0].strip() if raw_lines else title
+    contact_lines = []
+    content_start = 1
+    for i, l in enumerate(raw_lines[1:6], 1):
+        s = l.strip()
+        if not s or any(s.lower().startswith(k) for k in SECTION_KEYS) or s.isupper():
+            content_start = i; break
+        contact_lines.append(s)
+        content_start = i + 1
+
+    # Name - large, dark blue, centered
+    parts.append(para(run(name, bold=True, color="1F3864", size=36),
+                      align="center", space_after=40))
+    # Contact - smaller, centered, grey
+    if contact_lines:
+        contact_str = "   |   ".join(contact_lines)
+        parts.append(para(run(contact_str, color="555555", size=18),
+                          align="center", space_after=60))
+    # Header divider
+    parts.append(para("", border_bottom=True, space_before=0, space_after=120))
+
+    # Body
+    remaining = raw_lines[content_start:]
+    for line in remaining:
         s = line.strip()
         if not s:
             parts.append('<w:p><w:pPr><w:spacing w:after="40"/></w:pPr></w:p>')
             continue
         clean = s.replace("##","").replace("**","").strip()
-        is_h = (s.startswith("##") or s.startswith("**")
+        is_heading = (s.startswith("##") or s.startswith("**")
             or (s.isupper() and 3 < len(s) < 50)
             or any(s.lower().startswith(k) for k in SECTION_KEYS))
-        if is_h:
-            parts.append(para(clean, bold=True, color="2E75B6", size=24))
+
+        if is_heading:
+            parts.append(para(
+                run(clean.upper(), bold=True, color="2E75B6", size=22),
+                space_before=200, space_after=60, border_bottom=True))
+        elif s.startswith("-") or s.startswith("•"):
+            bullet_text = clean.lstrip("-•").strip()
+            parts.append(bullet_para(bullet_text))
+        elif "GPA" in s or "cgpa" in s.lower():
+            parts.append(para(run(clean, bold=True, color="2E75B6", size=20),
+                              space_after=60))
         else:
-            parts.append(para(clean, color="2D2D2D", size=20))
+            parts.append(para(run(clean, color="2D2D2D", size=20),
+                              space_after=60))
+
+    # Numbering XML for bullets
+    numbering_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:abstractNum w:abstractNumId="0">
+    <w:lvl w:ilvl="0">
+      <w:start w:val="1"/>
+      <w:numFmt w:val="bullet"/>
+      <w:lvlText w:val="&#x2022;"/>
+      <w:lvlJc w:val="left"/>
+      <w:pPr><w:ind w:left="360" w:hanging="180"/></w:pPr>
+      <w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/></w:rPr>
+    </w:lvl>
+  </w:abstractNum>
+  <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
+</w:numbering>"""
 
     doc_xml = ('''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 <w:body>''' + "".join(parts) +
-'''<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
+    '''<w:sectPr>
+      <w:pgSz w:w="12240" w:h="15840"/>
+      <w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080"/>
+    </w:sectPr>
 </w:body></w:document>''')
 
     ct = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-<Default Extension="xml" ContentType="application/xml"/>
-<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
 </Types>'''
+
     rr = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>'''
+
     wr = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'''
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
+</Relationships>'''
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", ct)
         z.writestr("_rels/.rels", rr)
         z.writestr("word/document.xml", doc_xml)
+        z.writestr("word/numbering.xml", numbering_xml)
         z.writestr("word/_rels/document.xml.rels", wr)
     buf.seek(0)
     return buf.getvalue()
