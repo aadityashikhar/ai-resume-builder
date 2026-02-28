@@ -229,7 +229,7 @@ def call_hf_api(prompt: str, max_tokens: int = 900) -> str:
         # Truncate prompt if too long
         prompt_truncated = prompt[:3000]
         payload = {
-            "model": "llama3-8b-8192",
+            "model": "llama-3.1-8b-instant",
             "messages": [{"role": "user", "content": prompt_truncated}],
             "max_tokens": 1024,
             "temperature": 0.7,
