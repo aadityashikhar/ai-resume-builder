@@ -473,7 +473,7 @@ def render_student_form(prefix=""):
 # ══════════════════════════════════════════════════════════════════════════════
 #  PAGE: RESUME GENERATOR
 # ══════════════════════════════════════════════════════════════════════════════
-elif "Resume" in page:
+if "Resume" in page:
     st.markdown("## 📄 Resume Generator")
     st.markdown("<div style='font-family:DM Mono,monospace;font-size:12px;color:#6B6B6B;margin-bottom:1.5rem;'>Powered by Mistral-7B via HuggingFace Inference API</div>", unsafe_allow_html=True)
 
@@ -508,7 +508,7 @@ elif "Resume" in page:
 # ══════════════════════════════════════════════════════════════════════════════
 #  PAGE: COVER LETTER
 # ══════════════════════════════════════════════════════════════════════════════
-elif "Cover" in page:
+if "Cover" in page:
     st.markdown("## ✉️ Cover Letter Generator")
     st.markdown("<div style='font-family:DM Mono,monospace;font-size:12px;color:#6B6B6B;margin-bottom:1.5rem;'>Tailored to the specific job description you provide</div>", unsafe_allow_html=True)
 
@@ -542,7 +542,7 @@ elif "Cover" in page:
 # ══════════════════════════════════════════════════════════════════════════════
 #  PAGE: PORTFOLIO BUILDER
 # ══════════════════════════════════════════════════════════════════════════════
-elif "Portfolio" in page:
+if "Portfolio" in page:
     st.markdown("## 🌐 Portfolio Builder")
     st.markdown("<div style='font-family:DM Mono,monospace;font-size:12px;color:#6B6B6B;margin-bottom:1.5rem;'>Generates copy for your personal portfolio website</div>", unsafe_allow_html=True)
 
@@ -576,7 +576,7 @@ elif "Portfolio" in page:
 # ══════════════════════════════════════════════════════════════════════════════
 #  PAGE: JOB MATCH SCORER
 # ══════════════════════════════════════════════════════════════════════════════
-elif "Job Match" in page:
+if "Job Match" in page:
     st.markdown("## 🎯 Job Match Scorer")
     st.markdown("<div style='font-family:DM Mono,monospace;font-size:12px;color:#6B6B6B;margin-bottom:1.5rem;'>ML-powered TF-IDF Cosine Similarity — No API needed</div>", unsafe_allow_html=True)
 
