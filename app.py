@@ -1,4 +1,7 @@
 import streamlit as st
+import os
+os.environ.get("HF_TOKEN", "NOT FOUND")
+st.write("Token status:", "Found ✓" if os.environ.get("HF_TOKEN") else "NOT FOUND ✗")
 import json
 import re
 from datetime import datetime
