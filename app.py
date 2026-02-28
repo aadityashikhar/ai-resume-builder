@@ -213,30 +213,97 @@ hr { border-color: var(--border) !important; }
 def call_hf_api(prompt: str, max_tokens: int = 900) -> str:
     """
     Calls HuggingFace Inference API (free tier).
-    Model: mistralai/Mistral-7B-Instruct-v0.2
-    Set HF_TOKEN in Streamlit secrets or as env var for higher rate limits.
+    Tries multiple models in order until one works.
     """
-    try:
-        import requests, os
-        token = st.secrets.get("HF_TOKEN", os.environ.get("HF_TOKEN", ""))
-        headers = {"Authorization": f"Bearer {token}"} if token else {}
-        API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
-        payload = {
-            "inputs": f"<s>[INST] {prompt} [/INST]",
-            "parameters": {
-                "max_new_tokens": max_tokens,
-                "temperature": 0.7,
-                "return_full_text": False,
+    import requests, os
+    token = st.secrets.get("HF_TOKEN", os.environ.get("HF_TOKEN", ""))
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+
+    MODELS = [
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "HuggingFaceH4/zephyr-7b-beta",
+        "tiiuae/falcon-7b-instruct",
+    ]
+
+    for model in MODELS:
+        try:
+            API_URL = f"https://api-inference.huggingface.co/models/{model}"
+            payload = {
+                "inputs": f"<s>[INST] {prompt} [/INST]",
+                "parameters": {
+                    "max_new_tokens": max_tokens,
+                    "temperature": 0.7,
+                    "return_full_text": False,
+                }
             }
-        }
-        r = requests.post(API_URL, headers=headers, json=payload, timeout=60)
-        r.raise_for_status()
-        data = r.json()
-        if isinstance(data, list) and len(data) > 0:
-            return data[0].get("generated_text", "").strip()
-        return str(data)
+            r = requests.post(API_URL, headers=headers, json=payload, timeout=60)
+            if r.status_code == 200:
+                data = r.json()
+                if isinstance(data, list) and len(data) > 0:
+                    return data[0].get("generated_text", "").strip()
+        except Exception:
+            continue
+
+    return "[All models unavailable. Please try again in a moment or check your HF_TOKEN.]"
+
+
+def generate_pdf(text: str, title: str = "Resume") -> bytes:
+    """Generate a clean PDF from text."""
+    try:
+        from fpdf import FPDF
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_margins(20, 20, 20)
+        pdf.set_auto_page_break(auto=True, margin=20)
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.cell(0, 10, title, ln=True)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.ln(4)
+        for line in text.split("\n"):
+            line = line.strip()
+            if line.startswith("##") or line.isupper():
+                pdf.set_font("Helvetica", "B", 11)
+                pdf.ln(3)
+                pdf.cell(0, 7, line.replace("##","").strip(), ln=True)
+                pdf.set_font("Helvetica", "", 10)
+            elif line == "":
+                pdf.ln(3)
+            else:
+                pdf.multi_cell(0, 6, line)
+        return bytes(pdf.output())
     except Exception as e:
-        return f"[API Error: {e}]\n\nTip: Add your HF_TOKEN to .streamlit/secrets.toml for better rate limits."
+        return b""
+
+
+def generate_docx(text: str, title: str = "Resume") -> bytes:
+    """Generate a Word document from text."""
+    try:
+        from docx import Document
+        from docx.shared import Pt, Inches
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        import io
+        doc = Document()
+        for section in doc.sections:
+            section.top_margin = Inches(0.8)
+            section.bottom_margin = Inches(0.8)
+            section.left_margin = Inches(1)
+            section.right_margin = Inches(1)
+        t = doc.add_heading(title, 0)
+        t.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for line in text.split("\n"):
+            line = line.strip()
+            if line.startswith("##") or (line.isupper() and len(line) > 3):
+                doc.add_heading(line.replace("##","").strip(), level=2)
+            elif line == "":
+                doc.add_paragraph("")
+            else:
+                p = doc.add_paragraph(line)
+                p.style.font.size = Pt(10)
+        buf = io.BytesIO()
+        doc.save(buf)
+        return buf.getvalue()
+    except Exception as e:
+        return b""
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -497,12 +564,14 @@ if "Resume" in page:
     if st.session_state.resume_output:
         st.markdown("### ✦ Generated Resume")
         st.markdown(f"<div class='output-box'>{st.session_state.resume_output}</div>", unsafe_allow_html=True)
-        st.download_button(
-            "⬇ Download as .txt",
-            data=st.session_state.resume_output,
-            file_name=f"resume_{data.get('name','student').replace(' ','_')}.txt",
-            mime="text/plain"
-        )
+        fname = data.get('name','student').replace(' ','_')
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.download_button("⬇ Download PDF", data=generate_pdf(st.session_state.resume_output, "Resume"), file_name=f"resume_{fname}.pdf", mime="application/pdf")
+        with c2:
+            st.download_button("⬇ Download Word", data=generate_docx(st.session_state.resume_output, "Resume"), file_name=f"resume_{fname}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        with c3:
+            st.download_button("⬇ Download TXT", data=st.session_state.resume_output, file_name=f"resume_{fname}.txt", mime="text/plain")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -531,12 +600,14 @@ if "Cover" in page:
 
             st.markdown("### ✦ Generated Cover Letter")
             st.markdown(f"<div class='output-box'>{result}</div>", unsafe_allow_html=True)
-            st.download_button(
-                "⬇ Download as .txt",
-                data=result,
-                file_name=f"cover_letter_{data.get('name','student').replace(' ','_')}.txt",
-                mime="text/plain"
-            )
+            fname = data.get('name','student').replace(' ','_')
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.download_button("⬇ Download PDF", data=generate_pdf(result, "Cover Letter"), file_name=f"cover_letter_{fname}.pdf", mime="application/pdf")
+            with c2:
+                st.download_button("⬇ Download Word", data=generate_docx(result, "Cover Letter"), file_name=f"cover_letter_{fname}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+            with c3:
+                st.download_button("⬇ Download TXT", data=result, file_name=f"cover_letter_{fname}.txt", mime="text/plain")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -565,12 +636,14 @@ if "Portfolio" in page:
 
             st.markdown("### ✦ Portfolio Content")
             st.markdown(f"<div class='output-box'>{result}</div>", unsafe_allow_html=True)
-            st.download_button(
-                "⬇ Download as .txt",
-                data=result,
-                file_name=f"portfolio_{data.get('name','student').replace(' ','_')}.txt",
-                mime="text/plain"
-            )
+            fname = data.get('name','student').replace(' ','_')
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.download_button("⬇ Download PDF", data=generate_pdf(result, "Portfolio"), file_name=f"portfolio_{fname}.pdf", mime="application/pdf")
+            with c2:
+                st.download_button("⬇ Download Word", data=generate_docx(result, "Portfolio"), file_name=f"portfolio_{fname}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+            with c3:
+                st.download_button("⬇ Download TXT", data=result, file_name=f"portfolio_{fname}.txt", mime="text/plain")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
