@@ -1,7 +1,4 @@
 import streamlit as st
-import os
-os.environ.get("HF_TOKEN", "NOT FOUND")
-st.write("Token status:", "Found ✓" if os.environ.get("HF_TOKEN") else "NOT FOUND ✗")
 import json
 import re
 from datetime import datetime
@@ -215,39 +212,36 @@ hr { border-color: var(--border) !important; }
 # ══════════════════════════════════════════════════════════════════════════════
 def call_hf_api(prompt: str, max_tokens: int = 900) -> str:
     """
-    Calls HuggingFace Inference API (free tier).
-    Tries multiple models in order until one works.
+    Calls Groq API (free tier) — fast and reliable.
+    Model: llama3-8b-8192
     """
     import requests, os
-    token = st.secrets.get("HF_TOKEN", os.environ.get("HF_TOKEN", ""))
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    api_key = st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY", ""))
 
-    MODELS = [
-        "mistralai/Mistral-7B-Instruct-v0.3",
-        "HuggingFaceH4/zephyr-7b-beta",
-        "tiiuae/falcon-7b-instruct",
-    ]
+    if not api_key:
+        return "[ERROR: No GROQ_API_KEY found. Please add it to Streamlit Secrets.]"
 
-    for model in MODELS:
-        try:
-            API_URL = f"https://api-inference.huggingface.co/models/{model}"
-            payload = {
-                "inputs": f"<s>[INST] {prompt} [/INST]",
-                "parameters": {
-                    "max_new_tokens": max_tokens,
-                    "temperature": 0.7,
-                    "return_full_text": False,
-                }
-            }
-            r = requests.post(API_URL, headers=headers, json=payload, timeout=60)
-            if r.status_code == 200:
-                data = r.json()
-                if isinstance(data, list) and len(data) > 0:
-                    return data[0].get("generated_text", "").strip()
-        except Exception:
-            continue
-
-    return "[All models unavailable. Please try again in a moment or check your HF_TOKEN.]"
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "llama3-8b-8192",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "temperature": 0.7,
+        }
+        r = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=60
+        )
+        r.raise_for_status()
+        return r.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        return f"[Groq API Error: {e}]"
 
 
 def generate_pdf(text: str, title: str = "Resume") -> bytes:
