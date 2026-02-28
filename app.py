@@ -249,9 +249,14 @@ def call_hf_api(prompt: str, max_tokens: int = 900) -> str:
 
 
 def generate_pdf(text: str, title: str = "Resume") -> bytes:
-    """Generate a clean PDF from text using fpdf2."""
-    from fpdf import FPDF
-    import unicodedata
+    """Generate a clean PDF from text using reportlab."""
+    import io, unicodedata
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
 
     def clean(s):
         return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
@@ -259,47 +264,51 @@ def generate_pdf(text: str, title: str = "Resume") -> bytes:
     SECTION_KEYS = ["summary", "education", "skills", "projects",
                     "experience", "certifications", "objective", "languages"]
 
-    pdf = FPDF()
-    pdf.set_margins(20, 20, 20)
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=20)
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter,
+                            leftMargin=inch, rightMargin=inch,
+                            topMargin=inch, bottomMargin=inch)
 
-    # Title
-    pdf.set_font("Helvetica", "B", 18)
-    pdf.set_text_color(31, 56, 100)
-    pdf.cell(0, 12, clean(title), ln=True, align="C")
-    pdf.set_draw_color(46, 117, 182)
-    pdf.set_line_width(0.5)
-    pdf.line(20, pdf.get_y(), 190, pdf.get_y())
-    pdf.ln(5)
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("DocTitle", parent=styles["Title"],
+                                 fontName="Helvetica-Bold", fontSize=18,
+                                 textColor=colors.HexColor("#1F3864"),
+                                 alignment=TA_CENTER, spaceAfter=8)
+    heading_style = ParagraphStyle("SecHeading", parent=styles["Heading2"],
+                                   fontName="Helvetica-Bold", fontSize=12,
+                                   textColor=colors.HexColor("#2E75B6"),
+                                   spaceBefore=10, spaceAfter=4)
+    body_style = ParagraphStyle("Body", parent=styles["Normal"],
+                                fontName="Helvetica", fontSize=10,
+                                textColor=colors.HexColor("#2D2D2D"),
+                                leading=16, spaceAfter=4,
+                                alignment=TA_JUSTIFY)
+
+    story = [Paragraph(clean(title), title_style),
+             HRFlowable(width="100%", thickness=1, color=colors.HexColor("#2E75B6")),
+             Spacer(1, 8)]
 
     for line in text.split("\n"):
         stripped = line.strip()
         if not stripped:
-            pdf.ln(3)
+            story.append(Spacer(1, 4))
             continue
-        clean_line = clean(stripped)
+        clean_line = clean(stripped).replace("##","").replace("**","").strip()
         is_heading = (
-            stripped.startswith("##")
-            or stripped.startswith("**")
+            stripped.startswith("##") or stripped.startswith("**")
             or stripped.isupper()
             or any(stripped.lower().startswith(k) for k in SECTION_KEYS)
         )
         if is_heading:
-            pdf.ln(2)
-            pdf.set_font("Helvetica", "B", 12)
-            pdf.set_text_color(46, 117, 182)
-            pdf.cell(0, 8, clean_line.replace("##","").replace("**","").strip(), ln=True)
-            pdf.set_draw_color(200, 200, 200)
-            pdf.set_line_width(0.2)
-            pdf.line(20, pdf.get_y(), 190, pdf.get_y())
-            pdf.ln(1)
+            story.append(Paragraph(clean_line, heading_style))
+            story.append(HRFlowable(width="100%", thickness=0.3,
+                                    color=colors.HexColor("#CCCCCC")))
         else:
-            pdf.set_font("Helvetica", "", 10)
-            pdf.set_text_color(45, 45, 45)
-            pdf.multi_cell(0, 6, clean_line)
+            story.append(Paragraph(clean_line, body_style))
 
-    return bytes(pdf.output())
+    doc.build(story)
+    buf.seek(0)
+    return buf.getvalue()
 
 
 def generate_docx(text: str, title: str = "Resume") -> bytes:
