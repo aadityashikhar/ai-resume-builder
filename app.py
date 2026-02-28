@@ -226,10 +226,12 @@ def call_hf_api(prompt: str, max_tokens: int = 900) -> str:
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
+        # Truncate prompt if too long
+        prompt_truncated = prompt[:3000]
         payload = {
             "model": "llama3-8b-8192",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt_truncated}],
+            "max_tokens": 1024,
             "temperature": 0.7,
         }
         r = requests.post(
@@ -238,7 +240,9 @@ def call_hf_api(prompt: str, max_tokens: int = 900) -> str:
             json=payload,
             timeout=60
         )
-        r.raise_for_status()
+        if not r.ok:
+            err = r.json().get("error", {}).get("message", r.text)
+            return f"[Groq Error {r.status_code}: {err}]"
         return r.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
         return f"[Groq API Error: {e}]"
