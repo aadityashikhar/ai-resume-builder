@@ -358,13 +358,6 @@ def generate_pdf(text: str, title: str = "Resume") -> bytes:
     return buf.getvalue()
 
 def generate_docx(text: str, title: str = "Resume") -> bytes:
-    """
-    Pure Python DOCX matching professional sample resume:
-    - A4, 1 page, tight margins, Calibri font, black only
-    - Name centered bold, contact single line no labels
-    - Section headings: bold black ALL CAPS with underline
-    - Proper bullet points
-    """
     import io, zipfile, re
 
     SECTION_KEYS = ["summary","education","skills","projects","experience",
@@ -373,195 +366,197 @@ def generate_docx(text: str, title: str = "Resume") -> bytes:
                     "professional experience","key skills","technical skills",
                     "hobbies","interests","references","declaration"]
 
+    STRIP_LINES = ["target role","target job","desired role","desired position",
+                   "contact information","contact info","contact details","contact"]
+
     CONTACT_LABELS = ["email","phone","linkedin","github","mobile","tel",
-                      "url","website","address","contact information",
-                      "contact","ph","cell","twitter","portfolio","location"]
+                      "url","website","address","ph","cell","twitter",
+                      "portfolio","location","skype","whatsapp"]
 
     def xe(s):
         return (s.replace("&","&amp;").replace("<","&lt;")
                  .replace(">","&gt;").replace('"',"&quot;"))
 
-    def rpr(bold=False, size=19, italic=False):
+    def rpr(bold=False, size=19):
         b = "<w:b/><w:bCs/>" if bold else ""
-        it = "<w:i/><w:iCs/>" if italic else ""
-        return ("<w:rPr>" + b + it +
-                '<w:color w:val="000000"/>'
-                '<w:sz w:val="' + str(size) + '"/>'
-                '<w:szCs w:val="' + str(size) + '"/>'
-                '<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>'
+        return ("<w:rPr>" + b +
+                "<w:color w:val=\"000000\"/>"
+                "<w:sz w:val=\"" + str(size) + "\"/>"
+                "<w:szCs w:val=\"" + str(size) + "\"/>"
+                "<w:rFonts w:ascii=\"Calibri\" w:hAnsi=\"Calibri\" w:cs=\"Calibri\"/>"
                 "</w:rPr>")
 
-    def run(txt, bold=False, size=19, italic=False):
-        return "<w:r>" + rpr(bold,size,italic) + '<w:t xml:space="preserve">' + xe(txt) + "</w:t></w:r>"
+    def run(t, bold=False, size=19):
+        return "<w:r>" + rpr(bold,size) + "<w:t xml:space=\"preserve\">" + xe(t) + "</w:t></w:r>"
 
-    def para(runs_xml, jc="left", sb=0, sa=30, line=220, border=False):
-        bb = ('<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="000000"/></w:pBdr>') if border else ""
-        return ('<w:p><w:pPr><w:jc w:val="' + jc + '"/>'
-                '<w:spacing w:before="' + str(sb) + '" w:after="' + str(sa) + '" '
-                'w:line="' + str(line) + '" w:lineRule="auto"/>'
-                + bb + '</w:pPr>' + runs_xml + '</w:p>')
+    def para(rx, jc="left", sb=0, sa=30, line=220, border=False):
+        bb = ("<w:pBdr><w:bottom w:val=\"single\" w:sz=\"6\" w:space=\"1\" w:color=\"000000\"/></w:pBdr>") if border else ""
+        return ("<w:p><w:pPr><w:jc w:val=\"" + jc + "\"/>"
+                "<w:spacing w:before=\"" + str(sb) + "\" w:after=\"" + str(sa) + "\" "
+                "w:line=\"" + str(line) + "\" w:lineRule=\"auto\"/>"
+                + bb + "</w:pPr>" + rx + "</w:p>")
 
-    def bullet_p(txt, level=0):
-        indent = 360 + level*360
-        hang   = 180
-        return ('<w:p><w:pPr>'
-                '<w:numPr><w:ilvl w:val="' + str(level) + '"/><w:numId w:val="1"/></w:numPr>'
-                '<w:spacing w:before="0" w:after="20" w:line="220" w:lineRule="auto"/>'
-                '<w:ind w:left="' + str(indent) + '" w:hanging="' + str(hang) + '"/>'
-                '</w:pPr>'
-                '<w:r>' + rpr(size=19) + '<w:t xml:space="preserve">' + xe(txt) + '</w:t></w:r>'
-                '</w:p>')
+    def bpara(t, lvl=0):
+        left = 360 + lvl*360
+        return ("<w:p><w:pPr>"
+                "<w:numPr><w:ilvl w:val=\"" + str(lvl) + "\"/><w:numId w:val=\"1\"/></w:numPr>"
+                "<w:spacing w:before=\"0\" w:after=\"20\" w:line=\"220\" w:lineRule=\"auto\"/>"
+                "<w:ind w:left=\"" + str(left) + "\" w:hanging=\"180\"/>"
+                "</w:pPr>"
+                "<w:r>" + rpr(size=19) + "<w:t xml:space=\"preserve\">" + xe(t) + "</w:t></w:r>"
+                "</w:p>")
 
-    def is_contact_line(s):
-        """Returns True if this line is a contact detail (email, phone, url, etc.)"""
-        sl = s.lower().strip()
-        # Check for label: value format
-        for lbl in CONTACT_LABELS:
-            if sl.startswith(lbl + ":") or sl.startswith(lbl + " :"):
-                return True
-        # Check for email pattern
-        if re.search(r'[\w.+-]+@[\w-]+\.[a-z]{2,}', sl): return True
-        # Check for phone pattern
-        if re.search(r'[\d\s\-\+\(\)]{7,}', sl) and len(sl) < 30: return True
-        # Check for linkedin/github url
-        if any(x in sl for x in ["linkedin.com","github.com","http","www.",".com",".in"]): return True
-        # Check for +91 style
-        if re.match(r'^\+?\d[\d\s\-]{8,}$', sl): return True
-        return False
-
-    def strip_contact_label(s):
-        """Remove label prefix like 'Email: ' from contact string"""
+    def strip_label(s):
+        """Remove 'Email: ' style prefix from a string"""
         for lbl in CONTACT_LABELS:
             if s.lower().startswith(lbl + ":"):
                 return s[len(lbl)+1:].strip()
             if s.lower().startswith(lbl + " :"):
                 return s[len(lbl)+2:].strip()
-        # Strip markdown links [text](url) -> text
-        s = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', s)
+        s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)
         return s.strip()
 
-    # ── Parse resume text ──────────────────────────────────────────────────
-    raw_lines = [l.rstrip() for l in text.split("\n")]
+    def is_contact(s):
+        sl = s.lower().strip()
+        for lbl in CONTACT_LABELS:
+            if sl.startswith(lbl+":") or sl.startswith(lbl+" :"):
+                return True
+        if re.search(r"[\w.+-]+@[\w-]+\.[a-z]{2,}", sl): return True
+        if any(x in sl for x in ["linkedin.com","github.com","http","www."]): return True
+        if re.match(r"^\+?[\d\s\-\.\(\)]{8,20}$", sl): return True
+        return False
 
-    # Step 1: Extract name (first non-empty line)
-    name = ""
-    name_idx = 0
-    for i, l in enumerate(raw_lines):
+    def should_strip(s):
+        sl = s.lower().strip().rstrip(":")
+        return sl in STRIP_LINES
+
+    # ── Parse ──────────────────────────────────────────────────────────────
+    raw = [l.rstrip() for l in text.split("\n")]
+
+    # Name = first non-empty line
+    name, name_idx = "", 0
+    for i,l in enumerate(raw):
         if l.strip():
             name = l.strip()
             name_idx = i
             break
 
-    # Step 2: Collect ALL contact info from anywhere in the text
-    # (AI sometimes puts it at top, sometimes at bottom, sometimes mid)
     contacts = []
-    body_lines = []
-    skip_next = False
+    body = []
 
-    for i, l in enumerate(raw_lines):
-        if i <= name_idx:
-            continue
-        s = l.strip()
+    for line in raw[name_idx+1:]:
+        s = line.strip()
         if not s:
-            body_lines.append(("empty", ""))
+            body.append(("gap",""))
             continue
 
         sl = s.lower()
 
-        # Skip "Contact Information:" header line entirely
-        if sl in ["contact information:", "contact information", "contact:", "contact"]:
-            skip_next = False
+        # Skip throw-away lines
+        if should_strip(s):
+            continue
+        if s.startswith("---") or s.startswith("___") or s.startswith("==="):
             continue
 
-        # Check if it's a contact section heading followed by details
-        if is_contact_line(s) or any(sl.startswith(lbl+":") for lbl in CONTACT_LABELS):
-            c = strip_contact_label(s)
+        # Contact pipe-separated line: "Email: x | Phone: y | LinkedIn: z"
+        if "|" in s and any(sl.startswith(lbl) for lbl in CONTACT_LABELS):
+            parts = s.split("|")
+            for p in parts:
+                c = strip_label(p.strip())
+                if c and c not in contacts:
+                    contacts.append(c)
+            continue
+
+        # Single contact line
+        if is_contact(s):
+            c = strip_label(s)
             if c and c not in contacts:
                 contacts.append(c)
-        elif s.startswith("---") or s.startswith("___"):
-            # Skip decorative lines
             continue
+
+        # Section heading
+        is_sec = (s.isupper() and 3 < len(s) < 60
+                  or any(sl.rstrip(":").startswith(k) for k in SECTION_KEYS)
+                  or s.startswith("##") or s.startswith("**"))
+        is_bul = s[:1] in ("-","•","*","+")
+        is_sub = (len(line) > len(line.lstrip()) and line.lstrip()[:1] in ("-","o","•"))
+
+        if is_sec and not is_bul:
+            clean = s.lstrip("#*").rstrip(":").strip()
+            body.append(("heading", clean))
+        elif is_sub:
+            body.append(("subbullet", line.lstrip(" -o•").strip()))
+        elif is_bul:
+            body.append(("bullet", s.lstrip("-•*+ ").strip()))
+        elif sl.startswith("gpa") or sl.startswith("cgpa"):
+            body.append(("bold", s))
         else:
-            # Check if this is a section heading
-            is_section = (s.isupper() and 3 < len(s) < 60
-                         or any(sl.startswith(k) for k in SECTION_KEYS)
-                         or s.startswith("##") or s.startswith("**"))
-            is_bul = s[:1] in ("-","•","*","+")
+            body.append(("body", s))
 
-            if is_section and not is_bul:
-                clean = s.lstrip("#* ").rstrip(":").strip()
-                body_lines.append(("heading", clean))
-            elif is_bul:
-                body_lines.append(("bullet", s.lstrip("-•*+ ").strip()))
-            elif "gpa" in sl or "cgpa" in sl:
-                body_lines.append(("gpa", s.lstrip("-•*+ ").strip()))
-            else:
-                body_lines.append(("body", s))
-
-    # ── Build document parts ───────────────────────────────────────────────
+    # ── Build XML ──────────────────────────────────────────────────────────
     parts = []
 
     # Name
-    parts.append(para(run(name, bold=True, size=26), jc="center", sa=20, line=260))
+    parts.append(para(run(name, bold=True, size=26), jc="center", sa=16, line=260))
 
-    # Contact — single line, all on one row, no labels
+    # Contact single line - all labels already stripped
     if contacts:
-        # Clean up contacts: deduplicate, remove pure-label items
-        clean_contacts = []
+        cl = []
         for c in contacts:
             c = c.strip().strip("|").strip()
-            if c and c.lower() not in CONTACT_LABELS and len(c) > 2:
-                clean_contacts.append(c)
-        if clean_contacts:
-            contact_line = "  |  ".join(clean_contacts[:6])  # max 6 items
-            parts.append(para(run(contact_line, size=17), jc="center", sa=30, line=220))
+            if c and len(c) > 2:
+                cl.append(c)
+        if cl:
+            parts.append(para(run("  |  ".join(cl[:6]), size=17), jc="center", sa=24))
 
-    # Divider under header
-    parts.append(para(run("", size=2), border=True, sb=0, sa=60))
+    # Header rule
+    parts.append(para(run("", size=2), border=True, sb=0, sa=50))
 
-    # Body
-    for kind, txt in body_lines:
-        if kind == "empty":
-            parts.append('<w:p><w:pPr><w:spacing w:after="20"/></w:pPr></w:p>')
+    for kind, txt in body:
+        if kind == "gap":
+            parts.append("<w:p><w:pPr><w:spacing w:after=\"16\"/></w:pPr></w:p>")
         elif kind == "heading":
-            clean = txt.upper().replace(":","").strip()
-            parts.append(para(run(clean, bold=True, size=20), sb=100, sa=30, border=True))
+            parts.append(para(run(txt.upper().rstrip(":"), bold=True, size=20),
+                              sb=90, sa=24, border=True))
         elif kind == "bullet":
-            parts.append(bullet_p(txt, level=0))
-        elif kind == "gpa":
-            parts.append(para(run(txt, bold=True, size=19), sa=20))
+            parts.append(bpara(txt, lvl=0))
+        elif kind == "subbullet":
+            parts.append(bpara(txt, lvl=1))
+        elif kind == "bold":
+            parts.append(para(run(txt, bold=True, size=19), sa=16))
         else:
-            parts.append(para(run(txt, size=19), sa=20))
+            parts.append(para(run(txt, size=19), sa=16))
 
-    # ── Numbering XML ──────────────────────────────────────────────────────
-    numbering = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                 '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-                 '<w:abstractNum w:abstractNumId="0">'
-                 '<w:lvl w:ilvl="0">'
-                 '<w:start w:val="1"/><w:numFmt w:val="bullet"/>'
-                 '<w:lvlText w:val="&#x2022;"/><w:lvlJc w:val="left"/>'
-                 '<w:pPr><w:ind w:left="360" w:hanging="180"/></w:pPr>'
-                 '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'
-                 '<w:sz w:val="18"/></w:rPr>'
-                 '</w:lvl>'
-                 '<w:lvl w:ilvl="1">'
-                 '<w:start w:val="1"/><w:numFmt w:val="bullet"/>'
-                 '<w:lvlText w:val="o"/><w:lvlJc w:val="left"/>'
-                 '<w:pPr><w:ind w:left="720" w:hanging="180"/></w:pPr>'
-                 '<w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/>'
-                 '<w:sz w:val="18"/></w:rPr>'
-                 '</w:lvl>'
-                 '</w:abstractNum>'
-                 '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>'
-                 '</w:numbering>')
+    # ── Numbering - use "-" text bullet which ALWAYS renders correctly ─────
+    numbering = ("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:abstractNum w:abstractNumId="0">
+    <w:lvl w:ilvl="0">
+      <w:start w:val="1"/><w:numFmt w:val="bullet"/>
+      <w:lvlText w:val="-"/>
+      <w:lvlJc w:val="left"/>
+      <w:pPr><w:ind w:left="360" w:hanging="180"/></w:pPr>
+      <w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>
+      <w:sz w:val="19"/></w:rPr>
+    </w:lvl>
+    <w:lvl w:ilvl="1">
+      <w:start w:val="1"/><w:numFmt w:val="bullet"/>
+      <w:lvlText w:val="o"/>
+      <w:lvlJc w:val="left"/>
+      <w:pPr><w:ind w:left="720" w:hanging="180"/></w:pPr>
+      <w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>
+      <w:sz w:val="19"/></w:rPr>
+    </w:lvl>
+  </w:abstractNum>
+  <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
+</w:numbering>""")
 
-    # ── Assemble XML ───────────────────────────────────────────────────────
     doc_xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
                '<w:body>' + "".join(parts) +
                '<w:sectPr>'
                '<w:pgSz w:w="11906" w:h="16838"/>'
-               '<w:pgMar w:top="680" w:right="680" w:bottom="680" w:left="680"/>'
+               '<w:pgMar w:top="650" w:right="700" w:bottom="650" w:left="700"/>'
                '</w:sectPr></w:body></w:document>')
 
     ct = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -571,23 +566,17 @@ def generate_docx(text: str, title: str = "Resume") -> bytes:
           '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
           '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>'
           '</Types>')
-
     rr = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
           '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-          '<Relationship Id="rId1" '
-          'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
-          'Target="word/document.xml"/>'
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
           '</Relationships>')
-
     wr = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
           '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-          '<Relationship Id="rId1" '
-          'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" '
-          'Target="numbering.xml"/>'
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>'
           '</Relationships>')
 
     buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+    with zipfile.ZipFile(buf,"w",zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", ct)
         z.writestr("_rels/.rels", rr)
         z.writestr("word/document.xml", doc_xml)
@@ -926,23 +915,49 @@ def compute_job_match(resume_text: str, job_description: str) -> dict:
 #  Prompt Builders
 # ══════════════════════════════════════════════════════════════════════════════
 def build_resume_prompt(data: dict) -> str:
-    return f"""You are a professional resume writer. Create a polished, ATS-optimized resume in plain text format.
+    linkedin = data.get("linkedin", "")
+    github   = data.get("github", "")
+    contacts = [data["email"], data["phone"]]
+    if linkedin and linkedin != "N/A": contacts.append(linkedin)
+    if github   and github   != "N/A": contacts.append(github)
+    contact_line = " | ".join(contacts)
 
-Student Profile:
-- Name: {data['name']}
-- Email: {data['email']} | Phone: {data['phone']}
-- LinkedIn: {data.get('linkedin', 'N/A')} | GitHub: {data.get('github', 'N/A')}
-- Degree: {data['degree']} in {data['major']} at {data['university']} ({data['grad_year']})
-- GPA: {data.get('gpa', 'N/A')}
-- Skills: {data['skills']}
-- Projects: {data['projects']}
-- Experience: {data.get('experience', 'N/A')}
-- Certifications: {data.get('certifications', 'N/A')}
-- Target Role: {data['target_role']}
-
-Write a complete resume with sections: Summary, Education, Skills, Projects, Experience (if any), Certifications.
-Make the Summary 2-3 sentences tailored to the target role. Be specific and quantify achievements where possible.
-Output ONLY the resume text, no extra commentary."""
+    return (
+        "You are a professional resume writer. Output ONLY the resume. "
+        "Follow this EXACT format with no deviations:\n\n"
+        f"{data['name']}\n"
+        f"{contact_line}\n\n"
+        "SUMMARY\n"
+        f"[Write 2-3 sentences tailored to {data['target_role']}]\n\n"
+        "EDUCATION\n"
+        f"{data['degree']} in {data['major']}\n"
+        f"{data['university']} ({data['grad_year']})\n"
+        f"GPA: {data.get('gpa', '')}\n\n"
+        "SKILLS\n"
+        "[All skills as a single comma-separated paragraph]\n\n"
+        "PROJECTS\n"
+        "- [Project with metric]\n"
+        "- [Project with metric]\n\n"
+        "EXPERIENCE\n"
+        "[Title], [Company] ([Dates])\n"
+        "- [Achievement]\n\n"
+        "CERTIFICATIONS\n"
+        "[Cert 1, Cert 2, Cert 3]\n\n"
+        "---\n"
+        "Now write the actual resume using this student data:\n"
+        f"Name: {data['name']}\n"
+        f"Degree: {data['degree']} in {data['major']} at {data['university']} ({data['grad_year']})\n"
+        f"GPA: {data.get('gpa', 'N/A')}\n"
+        f"Skills: {data['skills']}\n"
+        f"Projects: {data['projects']}\n"
+        f"Experience: {data.get('experience', 'None')}\n"
+        f"Certifications: {data.get('certifications', 'None')}\n"
+        f"Target Role: {data['target_role']}\n\n"
+        "CRITICAL: First line = name only. Second line = contact only. "
+        "Section headers must be ALL CAPS: SUMMARY, EDUCATION, SKILLS, PROJECTS, EXPERIENCE, CERTIFICATIONS. "
+        "Bullets use '- ' prefix. "
+        "NEVER write Email:, Phone:, LinkedIn:, GitHub:, Target Role: as labels in the output."
+    )
 
 
 def build_cover_letter_prompt(data: dict, job_desc: str) -> str:
