@@ -358,103 +358,173 @@ def generate_pdf(text: str, title: str = "Resume") -> bytes:
     return buf.getvalue()
 
 def generate_docx(text: str, title: str = "Resume") -> bytes:
-    """Pure Python DOCX - A4, 1 page, professional, zero external packages."""
+    """
+    Pure Python DOCX — matches professional resume sample:
+    - A4 single page, tight margins
+    - Name centered bold large
+    - Contact single line | separated no labels
+    - Section headings: bold, full-width underline, black
+    - Bullets: proper indented bullet points
+    - No colors except black/dark
+    """
     import io, zipfile, re
 
     SECTION_KEYS = ["summary","education","skills","projects","experience",
                     "certifications","objective","languages","awards",
-                    "achievements","internship","work experience"]
+                    "achievements","internship","work experience",
+                    "professional experience","key skills","technical skills"]
     CONTACT_PREFIXES = ["email:","phone:","linkedin:","github:","mobile:",
-                        "tel:","url:","website:","address:","contact information:"]
+                        "tel:","url:","website:","address:","contact information:",
+                        "contact:","ph:","cell:"]
 
     def xe(s):
-        return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace('"',"&quot;")
+        return (s.replace("&","&amp;").replace("<","&lt;")
+                 .replace(">","&gt;").replace('"',"&quot;"))
 
-    def make_rpr(bold=False, color="2D2D2D", size=16, italic=False):
-        b = "<w:b/><w:bCs/>" if bold else ""
-        it = "<w:i/><w:iCs/>" if italic else ""
-        sz = str(size)
-        return "<w:rPr>" + b + it + '<w:color w:val="' + color + '"/><w:sz w:val="' + sz + '"/><w:szCs w:val="' + sz + '"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>'
+    def rpr(bold=False, size=19, italic=False, underline=False):
+        b   = "<w:b/><w:bCs/>" if bold else ""
+        it  = "<w:i/><w:iCs/>" if italic else ""
+        ul  = '<w:u w:val="single"/>' if underline else ""
+        return ("<w:rPr>" + b + it + ul +
+                '<w:sz w:val="' + str(size) + '"/>'
+                '<w:szCs w:val="' + str(size) + '"/>'
+                '<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>'
+                '<w:color w:val="000000"/>'
+                "</w:rPr>")
 
-    def make_run(txt, bold=False, color="2D2D2D", size=16, italic=False):
-        return "<w:r>" + make_rpr(bold,color,size,italic) + '<w:t xml:space="preserve">' + xe(txt) + "</w:t></w:r>"
+    def run(txt, **kw):
+        return "<w:r>" + rpr(**kw) + '<w:t xml:space="preserve">' + xe(txt) + "</w:t></w:r>"
 
-    def make_para(runs, jc="left", sb=0, sa=40, border=False, left_ind=0):
-        bb = '<w:pBdr><w:bottom w:val="single" w:sz="4" w:space="1" w:color="2E75B6"/></w:pBdr>' if border else ""
-        ind = '<w:ind w:left="' + str(left_ind) + '" w:hanging="180"/>' if left_ind else ""
-        return ('<w:p><w:pPr><w:jc w:val="' + jc + '"/>' +
-                '<w:spacing w:before="' + str(sb) + '" w:after="' + str(sa) + '" w:line="240" w:lineRule="auto"/>' +
-                bb + ind + '</w:pPr>' + runs + '</w:p>')
+    def tab_run():
+        return "<w:r><w:tab/></w:r>"
 
-    def make_bullet(txt):
-        rpr = make_rpr(color="2D2D2D", size=16)
-        return ('<w:p><w:pPr>' +
-                '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>' +
-                '<w:spacing w:before="0" w:after="30" w:line="240" w:lineRule="auto"/>' +
-                '<w:ind w:left="360" w:hanging="180"/></w:pPr>' +
-                '<w:r>' + rpr + '<w:t xml:space="preserve">' + xe(txt) + '</w:t></w:r></w:p>')
+    def para(runs_xml, jc="left", sb=0, sa=30, line=220,
+             border_bottom=False, border_color="000000"):
+        bb = ""
+        if border_bottom:
+            bb = ('<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" '
+                  'w:color="' + border_color + '"/></w:pBdr>')
+        return ('<w:p><w:pPr>'
+                '<w:jc w:val="' + jc + '"/>'
+                '<w:spacing w:before="' + str(sb) + '" w:after="' + str(sa) + '" '
+                'w:line="' + str(line) + '" w:lineRule="auto"/>'
+                + bb +
+                '</w:pPr>' + runs_xml + '</w:p>')
 
+    def bullet_para(txt, indent=360, hanging=180, marker_size=19):
+        return ('<w:p><w:pPr>'
+                '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>'
+                '<w:spacing w:before="0" w:after="20" w:line="220" w:lineRule="auto"/>'
+                '<w:ind w:left="' + str(indent) + '" w:hanging="' + str(hanging) + '"/>'
+                '</w:pPr>'
+                '<w:r>' + rpr(size=marker_size) +
+                '<w:t xml:space="preserve">' + xe(txt) + '</w:t></w:r></w:p>')
+
+    def sub_bullet_para(txt):
+        # indented 'o' style sub-bullet
+        return ('<w:p><w:pPr>'
+                '<w:numPr><w:ilvl w:val="1"/><w:numId w:val="1"/></w:numPr>'
+                '<w:spacing w:before="0" w:after="20" w:line="220" w:lineRule="auto"/>'
+                '<w:ind w:left="720" w:hanging="180"/>'
+                '</w:pPr>'
+                '<w:r>' + rpr(size=19) +
+                '<w:t xml:space="preserve">' + xe(txt) + '</w:t></w:r></w:p>')
+
+    # ── numbering (2 levels: bullet + sub-bullet) ───────────────────────────
+    numbering = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                 '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                 '<w:abstractNum w:abstractNumId="0">'
+                 '<w:lvl w:ilvl="0">'
+                 '<w:start w:val="1"/><w:numFmt w:val="bullet"/>'
+                 '<w:lvlText w:val="&#x2022;"/>'
+                 '<w:lvlJc w:val="left"/>'
+                 '<w:pPr><w:ind w:left="360" w:hanging="180"/></w:pPr>'
+                 '<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/>'
+                 '<w:sz w:val="18"/></w:rPr>'
+                 '</w:lvl>'
+                 '<w:lvl w:ilvl="1">'
+                 '<w:start w:val="1"/><w:numFmt w:val="bullet"/>'
+                 '<w:lvlText w:val="o"/>'
+                 '<w:lvlJc w:val="left"/>'
+                 '<w:pPr><w:ind w:left="720" w:hanging="180"/></w:pPr>'
+                 '<w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/>'
+                 '<w:sz w:val="18"/></w:rPr>'
+                 '</w:lvl>'
+                 '</w:abstractNum>'
+                 '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>'
+                 '</w:numbering>')
+
+    # ── parse name + contacts ───────────────────────────────────────────────
     parts = []
     raw = text.split("\n")
     name = raw[0].strip() if raw else title
-
-    # Collect contact lines
     contacts, body_start = [], 1
+
     for i, l in enumerate(raw[1:8], 1):
         s = l.strip()
         if not s or s.isupper() or any(s.lower().startswith(k) for k in SECTION_KEYS):
             body_start = i; break
-        clean_c = s
-        for prefix in CONTACT_PREFIXES:
-            if s.lower().startswith(prefix):
-                clean_c = s[len(prefix):].strip(); break
-        clean_c = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", clean_c)
-        if clean_c and clean_c.lower() not in ["contact information", "contact"]:
-            contacts.append(clean_c)
+        c = s
+        for pfx in CONTACT_PREFIXES:
+            if s.lower().startswith(pfx):
+                c = s[len(pfx):].strip(); break
+        c = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", c)
+        if c and c.lower() not in ["contact information","contact"]:
+            contacts.append(c)
         body_start = i + 1
 
-    # Name
-    parts.append(make_para(make_run(name, bold=True, color="1F3864", size=26), jc="center", sa=20))
-    # Contact on ONE line
-    if contacts:
-        parts.append(make_para(make_run("  |  ".join(contacts), color="666666", size=14), jc="center", sa=30))
-    # Divider
-    parts.append(make_para(make_run("", color="FFFFFF", size=2), border=True, sb=0, sa=60))
+    # ── Name ────────────────────────────────────────────────────────────────
+    parts.append(para(run(name, bold=True, size=28), jc="center", sa=20, line=240))
 
+    # ── Contact single line ─────────────────────────────────────────────────
+    if contacts:
+        parts.append(para(run("  |  ".join(contacts), size=17),
+                          jc="center", sa=30, line=220))
+
+    # ── Header rule ─────────────────────────────────────────────────────────
+    parts.append(para(run("", size=4), border_bottom=True, sb=0, sa=60))
+
+    # ── Body ────────────────────────────────────────────────────────────────
     for line in raw[body_start:]:
         s = line.strip()
         if not s:
             parts.append('<w:p><w:pPr><w:spacing w:after="20"/></w:pPr></w:p>')
             continue
+
         clean = s.lstrip("#*-•+ ").strip()
         is_heading = (s.startswith("##") or s.startswith("**")
             or (s.isupper() and 3 < len(s) < 60)
             or any(s.lower().startswith(k) for k in SECTION_KEYS))
-        is_bullet = s.startswith(("-","•","*","+"))
+        is_bullet  = s[:1] in ("-","•","*","+")
+        is_sub     = s.startswith("  ") and s.strip()[:1] in ("-","o","•")
 
         if is_heading and not is_bullet:
-            parts.append(make_para(make_run(clean.upper(), bold=True, color="2E75B6", size=18), sb=100, sa=30, border=True))
+            parts.append(para(
+                run(clean.upper(), bold=True, size=20),
+                sb=120, sa=30, border_bottom=True))
+
+        elif is_sub:
+            parts.append(sub_bullet_para(s.lstrip(" -o•").strip()))
+
         elif is_bullet:
-            parts.append(make_bullet(s.lstrip("-•*+ ").strip()))
-        elif "gpa" in s.lower():
-            parts.append(make_para(make_run(clean, bold=True, color="2E75B6", size=16), sa=30))
+            parts.append(bullet_para(s.lstrip("-•*+ ").strip()))
+
+        elif "gpa" in s.lower() or "cgpa" in s.lower():
+            parts.append(para(run(clean, bold=True, size=19), sa=20))
+
+        elif ":" in s and len(s) < 60 and not any(c in s for c in ["http","www","@"]):
+            # Could be role: company or label: value — render bold label
+            idx = s.index(":")
+            label = s[:idx].strip()
+            val   = s[idx+1:].strip()
+            r_xml = run(label, bold=True, size=19) + run(": " + val, size=19)
+            parts.append(para(r_xml, sa=20))
+
         else:
-            parts.append(make_para(make_run(clean, color="2D2D2D", size=16), sa=30))
+            parts.append(para(run(clean, size=19), sa=20))
 
-    numbering = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:abstractNum w:abstractNumId="0">
-    <w:lvl w:ilvl="0">
-      <w:start w:val="1"/><w:numFmt w:val="bullet"/>
-      <w:lvlText w:val="&#x2022;"/>
-      <w:lvlJc w:val="left"/>
-      <w:pPr><w:ind w:left="360" w:hanging="180"/></w:pPr>
-      <w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="16"/></w:rPr>
-    </w:lvl>
-  </w:abstractNum>
-  <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
-</w:numbering>"""
-
+    # ── XML assembly ─────────────────────────────────────────────────────────
+    # A4 = 11906 x 16838 twips; 0.5in margins = 720 twips
     doc_xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
                '<w:body>' + "".join(parts) +
@@ -473,12 +543,16 @@ def generate_docx(text: str, title: str = "Resume") -> bytes:
 
     rr = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
           '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+          '<Relationship Id="rId1" '
+          'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+          'Target="word/document.xml"/>'
           '</Relationships>')
 
     wr = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
           '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>'
+          '<Relationship Id="rId1" '
+          'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" '
+          'Target="numbering.xml"/>'
           '</Relationships>')
 
     buf = io.BytesIO()
