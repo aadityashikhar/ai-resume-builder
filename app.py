@@ -358,79 +358,88 @@ def generate_pdf(text: str, title: str = "Resume") -> bytes:
     return buf.getvalue()
 
 def generate_docx(text: str, title: str = "Resume") -> bytes:
-    """Pure Python DOCX - professional formatting, zero external packages."""
-    import io, zipfile
+    """Pure Python DOCX - A4, 1 page, professional, zero external packages."""
+    import io, zipfile, re
 
     SECTION_KEYS = ["summary","education","skills","projects","experience",
                     "certifications","objective","languages","awards",
                     "achievements","internship","work experience"]
+    CONTACT_PREFIXES = ["email:","phone:","linkedin:","github:","mobile:",
+                        "tel:","url:","website:","address:","contact information:"]
 
     def xe(s):
-        return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace('"','&quot;')
+        return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace('"',"&quot;")
 
-    def rpr(bold=False, color="2D2D2D", size=20, italic=False):
+    def make_rpr(bold=False, color="2D2D2D", size=16, italic=False):
         b = "<w:b/><w:bCs/>" if bold else ""
         it = "<w:i/><w:iCs/>" if italic else ""
-        return (f"<w:rPr>{b}{it}<w:color w:val=\"{color}\"/>"
-                f"<w:sz w:val=\"{size}\"/><w:szCs w:val=\"{size}\"/>"
-                f"<w:rFonts w:ascii=\"Calibri\" w:hAnsi=\"Calibri\"/></w:rPr>")
+        sz = str(size)
+        return "<w:rPr>" + b + it + '<w:color w:val="' + color + '"/><w:sz w:val="' + sz + '"/><w:szCs w:val="' + sz + '"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>'
 
-    def run(txt, **kw):
-        return f"{rpr(**kw)}<w:t xml:space=\"preserve\">{xe(txt)}</w:t>"
+    def make_run(txt, bold=False, color="2D2D2D", size=16, italic=False):
+        return "<w:r>" + make_rpr(bold,color,size,italic) + '<w:t xml:space="preserve">' + xe(txt) + "</w:t></w:r>"
 
-    def p(content, jc="left", sb=0, sa=80, border=False, left_ind=0, hanging=0):
-        bb = ('<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="2E75B6"/></w:pBdr>') if border else ""
-        ind = f'<w:ind w:left="{left_ind}" w:hanging="{hanging}"/>' if left_ind else ""
-        return (f'<w:p><w:pPr><w:jc w:val="{jc}"/>' +
-                f'<w:spacing w:before="{sb}" w:after="{sa}"/>{bb}{ind}</w:pPr>' +
-                f'<w:r>{content}</w:r></w:p>')
+    def make_para(runs, jc="left", sb=0, sa=40, border=False, left_ind=0):
+        bb = '<w:pBdr><w:bottom w:val="single" w:sz="4" w:space="1" w:color="2E75B6"/></w:pBdr>' if border else ""
+        ind = '<w:ind w:left="' + str(left_ind) + '" w:hanging="180"/>' if left_ind else ""
+        return ('<w:p><w:pPr><w:jc w:val="' + jc + '"/>' +
+                '<w:spacing w:before="' + str(sb) + '" w:after="' + str(sa) + '" w:line="240" w:lineRule="auto"/>' +
+                bb + ind + '</w:pPr>' + runs + '</w:p>')
 
-    def bullet_p(txt):
+    def make_bullet(txt):
+        rpr = make_rpr(color="2D2D2D", size=16)
         return ('<w:p><w:pPr>' +
                 '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>' +
-                '<w:spacing w:before="0" w:after="60"/>' +
-                '<w:ind w:left="400" w:hanging="200"/></w:pPr>' +
-                f'<w:r>{rpr(color="2D2D2D", size=20)}<w:t xml:space="preserve">{xe(txt)}</w:t></w:r></w:p>')
+                '<w:spacing w:before="0" w:after="30" w:line="240" w:lineRule="auto"/>' +
+                '<w:ind w:left="360" w:hanging="180"/></w:pPr>' +
+                '<w:r>' + rpr + '<w:t xml:space="preserve">' + xe(txt) + '</w:t></w:r></w:p>')
 
     parts = []
     raw = text.split("\n")
     name = raw[0].strip() if raw else title
-    contacts, body_start = [], 1
-    for i,l in enumerate(raw[1:6],1):
-        s=l.strip()
-        if not s or s.isupper() or any(s.lower().startswith(k) for k in SECTION_KEYS):
-            body_start=i; break
-        contacts.append(s); body_start=i+1
 
-    # Name - large centered
-    parts.append(p(run(name, bold=True, color="1F3864", size=34), jc="center", sa=40))
-    # Contact - centered grey
+    # Collect contact lines
+    contacts, body_start = [], 1
+    for i, l in enumerate(raw[1:8], 1):
+        s = l.strip()
+        if not s or s.isupper() or any(s.lower().startswith(k) for k in SECTION_KEYS):
+            body_start = i; break
+        clean_c = s
+        for prefix in CONTACT_PREFIXES:
+            if s.lower().startswith(prefix):
+                clean_c = s[len(prefix):].strip(); break
+        clean_c = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", clean_c)
+        if clean_c and clean_c.lower() not in ["contact information", "contact"]:
+            contacts.append(clean_c)
+        body_start = i + 1
+
+    # Name
+    parts.append(make_para(make_run(name, bold=True, color="1F3864", size=26), jc="center", sa=20))
+    # Contact on ONE line
     if contacts:
-        parts.append(p(run("   |   ".join(contacts), color="666666", size=18), jc="center", sa=80))
-    # Header divider
-    parts.append(p(run("", color="FFFFFF", size=4), border=True, sb=0, sa=100))
+        parts.append(make_para(make_run("  |  ".join(contacts), color="666666", size=14), jc="center", sa=30))
+    # Divider
+    parts.append(make_para(make_run("", color="FFFFFF", size=2), border=True, sb=0, sa=60))
 
     for line in raw[body_start:]:
         s = line.strip()
         if not s:
-            parts.append('<w:p><w:pPr><w:spacing w:after="40"/></w:pPr></w:p>')
+            parts.append('<w:p><w:pPr><w:spacing w:after="20"/></w:pPr></w:p>')
             continue
-        clean = s.lstrip("#* ").strip()
+        clean = s.lstrip("#*-•+ ").strip()
         is_heading = (s.startswith("##") or s.startswith("**")
-            or (s.isupper() and 3 < len(s) < 50)
+            or (s.isupper() and 3 < len(s) < 60)
             or any(s.lower().startswith(k) for k in SECTION_KEYS))
-        is_bullet = (s.startswith("-") or s.startswith("•")
-            or s.startswith("*") or s.startswith("+"))
+        is_bullet = s.startswith(("-","•","*","+"))
 
         if is_heading and not is_bullet:
-            parts.append(p(run(clean.upper(), bold=True, color="2E75B6", size=22),
-                          sb=180, sa=60, border=True))
+            parts.append(make_para(make_run(clean.upper(), bold=True, color="2E75B6", size=18), sb=100, sa=30, border=True))
         elif is_bullet:
-            parts.append(bullet_p(s.lstrip("-•*+ ").strip()))
+            parts.append(make_bullet(s.lstrip("-•*+ ").strip()))
         elif "gpa" in s.lower():
-            parts.append(p(run(clean, bold=True, color="2E75B6", size=20), sa=60))
+            parts.append(make_para(make_run(clean, bold=True, color="2E75B6", size=16), sa=30))
         else:
-            parts.append(p(run(clean, color="2D2D2D", size=20), sa=60))
+            parts.append(make_para(make_run(clean, color="2D2D2D", size=16), sa=30))
 
     numbering = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -439,41 +448,44 @@ def generate_docx(text: str, title: str = "Resume") -> bytes:
       <w:start w:val="1"/><w:numFmt w:val="bullet"/>
       <w:lvlText w:val="&#x2022;"/>
       <w:lvlJc w:val="left"/>
-      <w:pPr><w:ind w:left="400" w:hanging="200"/></w:pPr>
-      <w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/></w:rPr>
+      <w:pPr><w:ind w:left="360" w:hanging="180"/></w:pPr>
+      <w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="16"/></w:rPr>
     </w:lvl>
   </w:abstractNum>
   <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
 </w:numbering>"""
 
-    doc = ('''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-<w:body>''' + "".join(parts) +
-'''<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>
-<w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080"/>
-</w:sectPr></w:body></w:document>''')
+    doc_xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+               '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+               '<w:body>' + "".join(parts) +
+               '<w:sectPr>'
+               '<w:pgSz w:w="11906" w:h="16838"/>'
+               '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>'
+               '</w:sectPr></w:body></w:document>')
 
-    ct = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-  <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
-</Types>'''
-    rr = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-</Relationships>'''
-    wr = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
-</Relationships>'''
+    ct = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+          '<Default Extension="xml" ContentType="application/xml"/>'
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+          '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>'
+          '</Types>')
+
+    rr = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+          '</Relationships>')
+
+    wr = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>'
+          '</Relationships>')
 
     buf = io.BytesIO()
-    with zipfile.ZipFile(buf,"w",zipfile.ZIP_DEFLATED) as z:
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", ct)
         z.writestr("_rels/.rels", rr)
-        z.writestr("word/document.xml", doc)
+        z.writestr("word/document.xml", doc_xml)
         z.writestr("word/numbering.xml", numbering)
         z.writestr("word/_rels/document.xml.rels", wr)
     buf.seek(0)
