@@ -359,93 +359,194 @@ def generate_pdf(text: str, title: str = "Resume") -> bytes:
 
 def generate_docx(text: str, title: str = "Resume") -> bytes:
     """
-    Pure Python DOCX — matches professional resume sample:
-    - A4 single page, tight margins
-    - Name centered bold large
-    - Contact single line | separated no labels
-    - Section headings: bold, full-width underline, black
-    - Bullets: proper indented bullet points
-    - No colors except black/dark
+    Pure Python DOCX matching professional sample resume:
+    - A4, 1 page, tight margins, Calibri font, black only
+    - Name centered bold, contact single line no labels
+    - Section headings: bold black ALL CAPS with underline
+    - Proper bullet points
     """
     import io, zipfile, re
 
     SECTION_KEYS = ["summary","education","skills","projects","experience",
                     "certifications","objective","languages","awards",
                     "achievements","internship","work experience",
-                    "professional experience","key skills","technical skills"]
-    CONTACT_PREFIXES = ["email:","phone:","linkedin:","github:","mobile:",
-                        "tel:","url:","website:","address:","contact information:",
-                        "contact:","ph:","cell:"]
+                    "professional experience","key skills","technical skills",
+                    "hobbies","interests","references","declaration"]
+
+    CONTACT_LABELS = ["email","phone","linkedin","github","mobile","tel",
+                      "url","website","address","contact information",
+                      "contact","ph","cell","twitter","portfolio","location"]
 
     def xe(s):
         return (s.replace("&","&amp;").replace("<","&lt;")
                  .replace(">","&gt;").replace('"',"&quot;"))
 
-    def rpr(bold=False, size=19, italic=False, underline=False):
-        b   = "<w:b/><w:bCs/>" if bold else ""
-        it  = "<w:i/><w:iCs/>" if italic else ""
-        ul  = '<w:u w:val="single"/>' if underline else ""
-        return ("<w:rPr>" + b + it + ul +
+    def rpr(bold=False, size=19, italic=False):
+        b = "<w:b/><w:bCs/>" if bold else ""
+        it = "<w:i/><w:iCs/>" if italic else ""
+        return ("<w:rPr>" + b + it +
+                '<w:color w:val="000000"/>'
                 '<w:sz w:val="' + str(size) + '"/>'
                 '<w:szCs w:val="' + str(size) + '"/>'
                 '<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>'
-                '<w:color w:val="000000"/>'
                 "</w:rPr>")
 
-    def run(txt, **kw):
-        return "<w:r>" + rpr(**kw) + '<w:t xml:space="preserve">' + xe(txt) + "</w:t></w:r>"
+    def run(txt, bold=False, size=19, italic=False):
+        return "<w:r>" + rpr(bold,size,italic) + '<w:t xml:space="preserve">' + xe(txt) + "</w:t></w:r>"
 
-    def tab_run():
-        return "<w:r><w:tab/></w:r>"
-
-    def para(runs_xml, jc="left", sb=0, sa=30, line=220,
-             border_bottom=False, border_color="000000"):
-        bb = ""
-        if border_bottom:
-            bb = ('<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" '
-                  'w:color="' + border_color + '"/></w:pBdr>')
-        return ('<w:p><w:pPr>'
-                '<w:jc w:val="' + jc + '"/>'
+    def para(runs_xml, jc="left", sb=0, sa=30, line=220, border=False):
+        bb = ('<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="000000"/></w:pBdr>') if border else ""
+        return ('<w:p><w:pPr><w:jc w:val="' + jc + '"/>'
                 '<w:spacing w:before="' + str(sb) + '" w:after="' + str(sa) + '" '
                 'w:line="' + str(line) + '" w:lineRule="auto"/>'
-                + bb +
-                '</w:pPr>' + runs_xml + '</w:p>')
+                + bb + '</w:pPr>' + runs_xml + '</w:p>')
 
-    def bullet_para(txt, indent=360, hanging=180, marker_size=19):
+    def bullet_p(txt, level=0):
+        indent = 360 + level*360
+        hang   = 180
         return ('<w:p><w:pPr>'
-                '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>'
+                '<w:numPr><w:ilvl w:val="' + str(level) + '"/><w:numId w:val="1"/></w:numPr>'
                 '<w:spacing w:before="0" w:after="20" w:line="220" w:lineRule="auto"/>'
-                '<w:ind w:left="' + str(indent) + '" w:hanging="' + str(hanging) + '"/>'
+                '<w:ind w:left="' + str(indent) + '" w:hanging="' + str(hang) + '"/>'
                 '</w:pPr>'
-                '<w:r>' + rpr(size=marker_size) +
-                '<w:t xml:space="preserve">' + xe(txt) + '</w:t></w:r></w:p>')
+                '<w:r>' + rpr(size=19) + '<w:t xml:space="preserve">' + xe(txt) + '</w:t></w:r>'
+                '</w:p>')
 
-    def sub_bullet_para(txt):
-        # indented 'o' style sub-bullet
-        return ('<w:p><w:pPr>'
-                '<w:numPr><w:ilvl w:val="1"/><w:numId w:val="1"/></w:numPr>'
-                '<w:spacing w:before="0" w:after="20" w:line="220" w:lineRule="auto"/>'
-                '<w:ind w:left="720" w:hanging="180"/>'
-                '</w:pPr>'
-                '<w:r>' + rpr(size=19) +
-                '<w:t xml:space="preserve">' + xe(txt) + '</w:t></w:r></w:p>')
+    def is_contact_line(s):
+        """Returns True if this line is a contact detail (email, phone, url, etc.)"""
+        sl = s.lower().strip()
+        # Check for label: value format
+        for lbl in CONTACT_LABELS:
+            if sl.startswith(lbl + ":") or sl.startswith(lbl + " :"):
+                return True
+        # Check for email pattern
+        if re.search(r'[\w.+-]+@[\w-]+\.[a-z]{2,}', sl): return True
+        # Check for phone pattern
+        if re.search(r'[\d\s\-\+\(\)]{7,}', sl) and len(sl) < 30: return True
+        # Check for linkedin/github url
+        if any(x in sl for x in ["linkedin.com","github.com","http","www.",".com",".in"]): return True
+        # Check for +91 style
+        if re.match(r'^\+?\d[\d\s\-]{8,}$', sl): return True
+        return False
 
-    # ── numbering (2 levels: bullet + sub-bullet) ───────────────────────────
+    def strip_contact_label(s):
+        """Remove label prefix like 'Email: ' from contact string"""
+        for lbl in CONTACT_LABELS:
+            if s.lower().startswith(lbl + ":"):
+                return s[len(lbl)+1:].strip()
+            if s.lower().startswith(lbl + " :"):
+                return s[len(lbl)+2:].strip()
+        # Strip markdown links [text](url) -> text
+        s = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', s)
+        return s.strip()
+
+    # ── Parse resume text ──────────────────────────────────────────────────
+    raw_lines = [l.rstrip() for l in text.split("\n")]
+
+    # Step 1: Extract name (first non-empty line)
+    name = ""
+    name_idx = 0
+    for i, l in enumerate(raw_lines):
+        if l.strip():
+            name = l.strip()
+            name_idx = i
+            break
+
+    # Step 2: Collect ALL contact info from anywhere in the text
+    # (AI sometimes puts it at top, sometimes at bottom, sometimes mid)
+    contacts = []
+    body_lines = []
+    skip_next = False
+
+    for i, l in enumerate(raw_lines):
+        if i <= name_idx:
+            continue
+        s = l.strip()
+        if not s:
+            body_lines.append(("empty", ""))
+            continue
+
+        sl = s.lower()
+
+        # Skip "Contact Information:" header line entirely
+        if sl in ["contact information:", "contact information", "contact:", "contact"]:
+            skip_next = False
+            continue
+
+        # Check if it's a contact section heading followed by details
+        if is_contact_line(s) or any(sl.startswith(lbl+":") for lbl in CONTACT_LABELS):
+            c = strip_contact_label(s)
+            if c and c not in contacts:
+                contacts.append(c)
+        elif s.startswith("---") or s.startswith("___"):
+            # Skip decorative lines
+            continue
+        else:
+            # Check if this is a section heading
+            is_section = (s.isupper() and 3 < len(s) < 60
+                         or any(sl.startswith(k) for k in SECTION_KEYS)
+                         or s.startswith("##") or s.startswith("**"))
+            is_bul = s[:1] in ("-","•","*","+")
+
+            if is_section and not is_bul:
+                clean = s.lstrip("#* ").rstrip(":").strip()
+                body_lines.append(("heading", clean))
+            elif is_bul:
+                body_lines.append(("bullet", s.lstrip("-•*+ ").strip()))
+            elif "gpa" in sl or "cgpa" in sl:
+                body_lines.append(("gpa", s.lstrip("-•*+ ").strip()))
+            else:
+                body_lines.append(("body", s))
+
+    # ── Build document parts ───────────────────────────────────────────────
+    parts = []
+
+    # Name
+    parts.append(para(run(name, bold=True, size=26), jc="center", sa=20, line=260))
+
+    # Contact — single line, all on one row, no labels
+    if contacts:
+        # Clean up contacts: deduplicate, remove pure-label items
+        clean_contacts = []
+        for c in contacts:
+            c = c.strip().strip("|").strip()
+            if c and c.lower() not in CONTACT_LABELS and len(c) > 2:
+                clean_contacts.append(c)
+        if clean_contacts:
+            contact_line = "  |  ".join(clean_contacts[:6])  # max 6 items
+            parts.append(para(run(contact_line, size=17), jc="center", sa=30, line=220))
+
+    # Divider under header
+    parts.append(para(run("", size=2), border=True, sb=0, sa=60))
+
+    # Body
+    for kind, txt in body_lines:
+        if kind == "empty":
+            parts.append('<w:p><w:pPr><w:spacing w:after="20"/></w:pPr></w:p>')
+        elif kind == "heading":
+            clean = txt.upper().replace(":","").strip()
+            parts.append(para(run(clean, bold=True, size=20), sb=100, sa=30, border=True))
+        elif kind == "bullet":
+            parts.append(bullet_p(txt, level=0))
+        elif kind == "gpa":
+            parts.append(para(run(txt, bold=True, size=19), sa=20))
+        else:
+            parts.append(para(run(txt, size=19), sa=20))
+
+    # ── Numbering XML ──────────────────────────────────────────────────────
     numbering = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
                  '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
                  '<w:abstractNum w:abstractNumId="0">'
                  '<w:lvl w:ilvl="0">'
                  '<w:start w:val="1"/><w:numFmt w:val="bullet"/>'
-                 '<w:lvlText w:val="&#x2022;"/>'
-                 '<w:lvlJc w:val="left"/>'
+                 '<w:lvlText w:val="&#x2022;"/><w:lvlJc w:val="left"/>'
                  '<w:pPr><w:ind w:left="360" w:hanging="180"/></w:pPr>'
-                 '<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/>'
+                 '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'
                  '<w:sz w:val="18"/></w:rPr>'
                  '</w:lvl>'
                  '<w:lvl w:ilvl="1">'
                  '<w:start w:val="1"/><w:numFmt w:val="bullet"/>'
-                 '<w:lvlText w:val="o"/>'
-                 '<w:lvlJc w:val="left"/>'
+                 '<w:lvlText w:val="o"/><w:lvlJc w:val="left"/>'
                  '<w:pPr><w:ind w:left="720" w:hanging="180"/></w:pPr>'
                  '<w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/>'
                  '<w:sz w:val="18"/></w:rPr>'
@@ -454,83 +555,13 @@ def generate_docx(text: str, title: str = "Resume") -> bytes:
                  '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>'
                  '</w:numbering>')
 
-    # ── parse name + contacts ───────────────────────────────────────────────
-    parts = []
-    raw = text.split("\n")
-    name = raw[0].strip() if raw else title
-    contacts, body_start = [], 1
-
-    for i, l in enumerate(raw[1:8], 1):
-        s = l.strip()
-        if not s or s.isupper() or any(s.lower().startswith(k) for k in SECTION_KEYS):
-            body_start = i; break
-        c = s
-        for pfx in CONTACT_PREFIXES:
-            if s.lower().startswith(pfx):
-                c = s[len(pfx):].strip(); break
-        c = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", c)
-        if c and c.lower() not in ["contact information","contact"]:
-            contacts.append(c)
-        body_start = i + 1
-
-    # ── Name ────────────────────────────────────────────────────────────────
-    parts.append(para(run(name, bold=True, size=28), jc="center", sa=20, line=240))
-
-    # ── Contact single line ─────────────────────────────────────────────────
-    if contacts:
-        parts.append(para(run("  |  ".join(contacts), size=17),
-                          jc="center", sa=30, line=220))
-
-    # ── Header rule ─────────────────────────────────────────────────────────
-    parts.append(para(run("", size=4), border_bottom=True, sb=0, sa=60))
-
-    # ── Body ────────────────────────────────────────────────────────────────
-    for line in raw[body_start:]:
-        s = line.strip()
-        if not s:
-            parts.append('<w:p><w:pPr><w:spacing w:after="20"/></w:pPr></w:p>')
-            continue
-
-        clean = s.lstrip("#*-•+ ").strip()
-        is_heading = (s.startswith("##") or s.startswith("**")
-            or (s.isupper() and 3 < len(s) < 60)
-            or any(s.lower().startswith(k) for k in SECTION_KEYS))
-        is_bullet  = s[:1] in ("-","•","*","+")
-        is_sub     = s.startswith("  ") and s.strip()[:1] in ("-","o","•")
-
-        if is_heading and not is_bullet:
-            parts.append(para(
-                run(clean.upper(), bold=True, size=20),
-                sb=120, sa=30, border_bottom=True))
-
-        elif is_sub:
-            parts.append(sub_bullet_para(s.lstrip(" -o•").strip()))
-
-        elif is_bullet:
-            parts.append(bullet_para(s.lstrip("-•*+ ").strip()))
-
-        elif "gpa" in s.lower() or "cgpa" in s.lower():
-            parts.append(para(run(clean, bold=True, size=19), sa=20))
-
-        elif ":" in s and len(s) < 60 and not any(c in s for c in ["http","www","@"]):
-            # Could be role: company or label: value — render bold label
-            idx = s.index(":")
-            label = s[:idx].strip()
-            val   = s[idx+1:].strip()
-            r_xml = run(label, bold=True, size=19) + run(": " + val, size=19)
-            parts.append(para(r_xml, sa=20))
-
-        else:
-            parts.append(para(run(clean, size=19), sa=20))
-
-    # ── XML assembly ─────────────────────────────────────────────────────────
-    # A4 = 11906 x 16838 twips; 0.5in margins = 720 twips
+    # ── Assemble XML ───────────────────────────────────────────────────────
     doc_xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
                '<w:body>' + "".join(parts) +
                '<w:sectPr>'
                '<w:pgSz w:w="11906" w:h="16838"/>'
-               '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>'
+               '<w:pgMar w:top="680" w:right="680" w:bottom="680" w:left="680"/>'
                '</w:sectPr></w:body></w:document>')
 
     ct = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
