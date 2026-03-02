@@ -251,6 +251,7 @@ def call_hf_api(prompt: str, max_tokens: int = 900) -> str:
 def generate_pdf(text: str, title: str = "Resume") -> bytes:
     """Pure Python PDF - professional formatting, zero external packages."""
     import io
+    text = clean_resume_text(text)
 
     SECTION_KEYS = ["summary","education","skills","projects","experience",
                     "certifications","objective","languages","awards",
@@ -357,8 +358,39 @@ def generate_pdf(text: str, title: str = "Resume") -> bytes:
     buf.write(b"trailer\n<< /Size " + str(len(objs)+1).encode() + b" /Root 1 0 R >>\nstartxref\n" + str(xp).encode() + b"\n%%EOF\n")
     return buf.getvalue()
 
+def clean_resume_text(text: str) -> str:
+    """Strip AI artifacts before passing to document generators."""
+    import re
+    lines_in = text.split("\n")
+    lines_out = []
+    SKIP_PATTERNS = [
+        r"^target role[:\s]",
+        r"^desired role[:\s]",
+        r"^contact information[:\s]*$",
+        r"^contact details[:\s]*$",
+        r"^contact[:\s]*$",
+        r"^---+$",
+        r"^===+$",
+        r"^___+$",
+    ]
+    for line in lines_in:
+        sl = line.strip().lower()
+        skip = any(re.match(p, sl) for p in SKIP_PATTERNS)
+        if skip:
+            continue
+        # Remove markdown bold/italic
+        line = re.sub(r"\*\*(.+?)\*\*", r"\1", line)
+        line = re.sub(r"\*(.+?)\*", r"\1", line)
+        line = re.sub(r"__(.+?)__", r"\1", line)
+        # Remove > blockquote prefix Word sometimes adds
+        line = re.sub(r"^\s*>\s*", "", line)
+        lines_out.append(line)
+    return "\n".join(lines_out)
+
+
 def generate_docx(text: str, title: str = "Resume") -> bytes:
     import io, zipfile, re
+    text = clean_resume_text(text)
 
     SECTION_KEYS = ["summary","education","skills","projects","experience",
                     "certifications","objective","languages","awards",
@@ -731,6 +763,36 @@ def generate_pdf(text: str, title: str = "Resume") -> bytes:
     buf.write(b"trailer\n<< /Size "+str(len(objs)+1).encode()
               +b" /Root 1 0 R >>\nstartxref\n"+str(xp).encode()+b"\n%%EOF\n")
     return buf.getvalue()
+
+def clean_resume_text(text: str) -> str:
+    """Strip AI artifacts before passing to document generators."""
+    import re
+    lines_in = text.split("\n")
+    lines_out = []
+    SKIP_PATTERNS = [
+        r"^target role[:\s]",
+        r"^desired role[:\s]",
+        r"^contact information[:\s]*$",
+        r"^contact details[:\s]*$",
+        r"^contact[:\s]*$",
+        r"^---+$",
+        r"^===+$",
+        r"^___+$",
+    ]
+    for line in lines_in:
+        sl = line.strip().lower()
+        skip = any(re.match(p, sl) for p in SKIP_PATTERNS)
+        if skip:
+            continue
+        # Remove markdown bold/italic
+        line = re.sub(r"\*\*(.+?)\*\*", r"\1", line)
+        line = re.sub(r"\*(.+?)\*", r"\1", line)
+        line = re.sub(r"__(.+?)__", r"\1", line)
+        # Remove > blockquote prefix Word sometimes adds
+        line = re.sub(r"^\s*>\s*", "", line)
+        lines_out.append(line)
+    return "\n".join(lines_out)
+
 
 def generate_docx(text: str, title: str = "Resume") -> bytes:
     """Pure Python DOCX - professional formatting, zero external packages."""
