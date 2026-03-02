@@ -1101,6 +1101,24 @@ if "student_data" not in st.session_state:
 if "resume_output" not in st.session_state:
     st.session_state.resume_output = ""
 
+JOHN_DOE = {
+    "name": "John Doe",
+    "email": "johndoe@gmail.com",
+    "phone": "+91-9876543210",
+    "degree": "B.Tech",
+    "major": "Computer Science",
+    "university": "Indian Institute of Technology, Delhi",
+    "grad_year": "2025",
+    "gpa": "8.7/10",
+    "target_role": "Software Engineer",
+    "linkedin": "linkedin.com/in/johndoe",
+    "github": "github.com/johndoe",
+    "certifications": "AWS Cloud Practitioner, TensorFlow Developer Certificate, Scrum Master (CSM)",
+    "experience": "Software Intern · Google · Summer 2024 · Built internal tooling that reduced deployment time by 35%",
+    "skills": "Python, Java, C++, JavaScript, React, Node.js, TensorFlow, PyTorch, SQL, MongoDB, Docker, Kubernetes, Git, AWS, Linux",
+    "projects": "AI Resume Builder – Built a Streamlit web app using Groq API and Llama 3.1 to generate ATS-optimized resumes, deployed on Streamlit Cloud\nReal-Time Chat App – Developed a WebSocket-based chat application using Node.js and React with 200+ concurrent users\nML Price Predictor – Trained an XGBoost model on 50k+ housing records achieving 94% accuracy, deployed as REST API using FastAPI",
+}
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  PAGE: HOME
@@ -1156,6 +1174,14 @@ if "Home" in page:
 # ══════════════════════════════════════════════════════════════════════════════
 def render_student_form(prefix=""):
     sd = st.session_state.student_data
+
+    col_btn, col_spacer = st.columns([1, 4])
+    with col_btn:
+        if st.button("⚡ Autofill Test Data", key=f"{prefix}autofill",
+                     help="Fill form with John Doe sample data for quick testing"):
+            st.session_state.student_data = JOHN_DOE.copy()
+            st.rerun()
+
     with st.expander("👤 Student Profile", expanded=True):
         c1, c2, c3 = st.columns(3)
         with c1:
