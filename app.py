@@ -1173,65 +1173,75 @@ if "Home" in page:
 #  SHARED STUDENT FORM (used by Resume + Cover Letter + Portfolio)
 # ══════════════════════════════════════════════════════════════════════════════
 def render_student_form(prefix=""):
-    FIELD_KEYS = ["name","email","phone","degree","major","university",
-                  "grad_year","gpa","target_role","linkedin","github",
-                  "certifications","experience","skills","projects"]
+    FIELDS = {
+        "name": "", "email": "", "phone": "", "degree": "B.Tech",
+        "major": "Computer Science", "university": "", "grad_year": "2025",
+        "gpa": "", "target_role": "Software Engineer", "linkedin": "",
+        "github": "", "certifications": "", "experience": "", "skills": "", "projects": ""
+    }
 
-    def flush_widgets(new_data):
-        """Delete widget keys so Streamlit re-reads from student_data on next run."""
-        for k in FIELD_KEYS:
-            wkey = f"{prefix}{k}"
-            if wkey in st.session_state:
-                del st.session_state[wkey]
-        st.session_state.student_data = new_data
+    # Write directly into widget keys — the ONLY reliable way in Streamlit
+    def set_fields(values):
+        for k, v in FIELDS.items():
+            st.session_state[f"{prefix}{k}"] = values.get(k, v)
+        st.session_state.student_data = values
 
-    # ── Action buttons ─────────────────────────────────────────────────────
-    c_auto, c_clear, c_spacer = st.columns([1, 1, 5])
+    c_auto, c_clear, _ = st.columns([1, 1, 5])
     with c_auto:
-        if st.button("⚡ Autofill", key=f"{prefix}autofill",
-                     help="Fill with John Doe test data"):
-            flush_widgets(JOHN_DOE.copy())
-            st.rerun()
+        if st.button("⚡ Autofill", key=f"{prefix}autofill"):
+            set_fields(JOHN_DOE.copy())
     with c_clear:
-        if st.button("🗑 Clear All", key=f"{prefix}clear",
-                     help="Clear all fields"):
-            flush_widgets({})
-            st.rerun()
-
-    sd = st.session_state.student_data
+        if st.button("🗑 Clear All", key=f"{prefix}clear"):
+            set_fields({})
 
     with st.expander("👤 Student Profile", expanded=True):
         c1, c2, c3 = st.columns(3)
         with c1:
-            name = st.text_input("Full Name", value=sd.get("name", ""), key=f"{prefix}name")
-            email = st.text_input("Email", value=sd.get("email", ""), key=f"{prefix}email")
-            phone = st.text_input("Phone", value=sd.get("phone", ""), key=f"{prefix}phone")
+            name  = st.text_input("Full Name",  key=f"{prefix}name")
+            email = st.text_input("Email",       key=f"{prefix}email")
+            phone = st.text_input("Phone",       key=f"{prefix}phone")
         with c2:
-            degree = st.selectbox("Degree", ["B.Tech", "B.Sc", "BCA", "MCA", "M.Tech", "MBA", "Other"], key=f"{prefix}degree", index=["B.Tech","B.Sc","BCA","MCA","M.Tech","MBA","Other"].index(sd.get("degree","B.Tech")))
-            major = st.text_input("Major / Branch", value=sd.get("major", "Computer Science"), key=f"{prefix}major")
-            university = st.text_input("University", value=sd.get("university", ""), key=f"{prefix}university")
+            degree     = st.selectbox("Degree", ["B.Tech","B.Sc","BCA","MCA","M.Tech","MBA","Other"], key=f"{prefix}degree")
+            major      = st.text_input("Major / Branch",  key=f"{prefix}major")
+            university = st.text_input("University",      key=f"{prefix}university")
         with c3:
-            grad_year = st.text_input("Graduation Year", value=sd.get("grad_year", "2025"), key=f"{prefix}grad_year")
-            gpa = st.text_input("GPA / CGPA", value=sd.get("gpa", ""), key=f"{prefix}gpa")
-            target_role = st.text_input("Target Role", value=sd.get("target_role", "Software Engineer"), key=f"{prefix}target_role", placeholder="e.g. ML Engineer, Data Analyst")
+            grad_year   = st.text_input("Graduation Year", key=f"{prefix}grad_year")
+            gpa         = st.text_input("GPA / CGPA",      key=f"{prefix}gpa")
+            target_role = st.text_input("Target Role",     key=f"{prefix}target_role")
 
         c4, c5 = st.columns(2)
         with c4:
-            linkedin = st.text_input("LinkedIn URL", value=sd.get("linkedin", ""), key=f"{prefix}linkedin")
-            github = st.text_input("GitHub URL", value=sd.get("github", ""), key=f"{prefix}github")
+            linkedin = st.text_input("LinkedIn URL", key=f"{prefix}linkedin")
+            github   = st.text_input("GitHub URL",   key=f"{prefix}github")
         with c5:
-            certifications = st.text_input("Certifications", value=sd.get("certifications", ""), key=f"{prefix}certifications", placeholder="e.g. AWS Cloud Practitioner, TensorFlow Developer")
-            experience = st.text_area("Internship / Work Experience", value=sd.get("experience", ""), key=f"{prefix}experience", height=68, placeholder="Company · Role · Duration · Key achievement")
+            certifications = st.text_input("Certifications", key=f"{prefix}certifications")
+            experience     = st.text_area("Internship / Work Experience", key=f"{prefix}experience", height=68)
 
-        skills = st.text_area("Technical Skills", value=sd.get("skills", ""), key=f"{prefix}skills", height=68, placeholder="Python, TensorFlow, React, SQL, Git, Docker...")
-        projects = st.text_area("Projects (one per line)", value=sd.get("projects", ""), key=f"{prefix}projects", height=100, placeholder="Project Name – brief description – tech stack used\nAnother Project – ...")
+        skills   = st.text_area("Technical Skills",       key=f"{prefix}skills",   height=68)
+        projects = st.text_area("Projects (one per line)", key=f"{prefix}projects", height=100)
+
+    # Initialise missing keys on first load
+    for k, v in FIELDS.items():
+        wk = f"{prefix}{k}"
+        if wk not in st.session_state:
+            st.session_state[wk] = v
 
     data = {
-        "name": name, "email": email, "phone": phone, "degree": degree,
-        "major": major, "university": university, "grad_year": grad_year,
-        "gpa": gpa, "target_role": target_role, "linkedin": linkedin,
-        "github": github, "certifications": certifications,
-        "experience": experience, "skills": skills, "projects": projects,
+        "name": st.session_state[f"{prefix}name"],
+        "email": st.session_state[f"{prefix}email"],
+        "phone": st.session_state[f"{prefix}phone"],
+        "degree": st.session_state[f"{prefix}degree"],
+        "major": st.session_state[f"{prefix}major"],
+        "university": st.session_state[f"{prefix}university"],
+        "grad_year": st.session_state[f"{prefix}grad_year"],
+        "gpa": st.session_state[f"{prefix}gpa"],
+        "target_role": st.session_state[f"{prefix}target_role"],
+        "linkedin": st.session_state[f"{prefix}linkedin"],
+        "github": st.session_state[f"{prefix}github"],
+        "certifications": st.session_state[f"{prefix}certifications"],
+        "experience": st.session_state[f"{prefix}experience"],
+        "skills": st.session_state[f"{prefix}skills"],
+        "projects": st.session_state[f"{prefix}projects"],
     }
     st.session_state.student_data = data
     return data
