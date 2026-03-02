@@ -1173,14 +1173,32 @@ if "Home" in page:
 #  SHARED STUDENT FORM (used by Resume + Cover Letter + Portfolio)
 # ══════════════════════════════════════════════════════════════════════════════
 def render_student_form(prefix=""):
-    sd = st.session_state.student_data
+    FIELD_KEYS = ["name","email","phone","degree","major","university",
+                  "grad_year","gpa","target_role","linkedin","github",
+                  "certifications","experience","skills","projects"]
 
-    col_btn, col_spacer = st.columns([1, 4])
-    with col_btn:
-        if st.button("⚡ Autofill Test Data", key=f"{prefix}autofill",
-                     help="Fill form with John Doe sample data for quick testing"):
-            st.session_state.student_data = JOHN_DOE.copy()
+    def flush_widgets(new_data):
+        """Delete widget keys so Streamlit re-reads from student_data on next run."""
+        for k in FIELD_KEYS:
+            wkey = f"{prefix}{k}"
+            if wkey in st.session_state:
+                del st.session_state[wkey]
+        st.session_state.student_data = new_data
+
+    # ── Action buttons ─────────────────────────────────────────────────────
+    c_auto, c_clear, c_spacer = st.columns([1, 1, 5])
+    with c_auto:
+        if st.button("⚡ Autofill", key=f"{prefix}autofill",
+                     help="Fill with John Doe test data"):
+            flush_widgets(JOHN_DOE.copy())
             st.rerun()
+    with c_clear:
+        if st.button("🗑 Clear All", key=f"{prefix}clear",
+                     help="Clear all fields"):
+            flush_widgets({})
+            st.rerun()
+
+    sd = st.session_state.student_data
 
     with st.expander("👤 Student Profile", expanded=True):
         c1, c2, c3 = st.columns(3)
